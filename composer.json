@@ -1,0 +1,23 @@
+{
+    "name": "magnusjt/mongotd",
+    "description": "Mongodb timeseries database",
+    "keywords": ["timeseries"],
+    "license": "MIT",
+    "type": "project",
+    "require": {
+		"psr/log": "1.0.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "4.2.*",
+		"monolog/monolog": "1.10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Mongotd\\": "src"
+        }
+    },
+    "config": {
+        "preferred-install": "dist"
+    },
+    "minimum-stability": "stable"
+}
