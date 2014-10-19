@@ -1,5 +1,5 @@
 <?php
-require(__DIR__ . '/../../vendor/autoload.php');
+require(__DIR__ . '/../../../vendor/autoload.php');
 date_default_timezone_set('Europe/Oslo');
 
 use \Mongotd\Connection;
@@ -12,7 +12,7 @@ $mongotd = new Mongotd($conn, null);
 $retriever = $mongotd->getRetriever();
 
 $sids = array(1,2);
-$start = "2014-09-19 00:00:00";
+$start = "2014-09-10 00:00:00";
 $end = "2014-09-20 00:00:00";
 $aggregation = Aggregation::SUM;
 $resolution = Resolution::HOUR;

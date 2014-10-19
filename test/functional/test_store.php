@@ -1,5 +1,5 @@
 <?php
-require(__DIR__.'/../vendor/autoload.php');
+require(__DIR__.'/../../vendor/autoload.php');
 date_default_timezone_set('Europe/Oslo');
 
 $conn = new \Mongotd\Connection('localhost', 'mongotdtest', 'mongotdtest');
@@ -15,14 +15,25 @@ foreach($dateperiod as $datetime){
 
     echo $datetime->format("Y-m-d H:i:s") . "\n";
 
-    for($sid = 1; $sid <= 10000; $sid++){
-        $inserter->add($sid, $sid*10000 + rand());
+    for($sid = 1; $sid <= 1; $sid++){
+        $inserter->add($sid, $sid*100 + 100*sin(2*pi()*(($datetime->getTimestamp()/60)%1440)/1440) + rand()%20);
     }
 
     try{
         $inserter->execute();
     }catch(Exception $e){
         echo "ERROR: " . $conn->db()->lastError()['err'] . "\n";
+        echo $e->getMessage();
+    }
+
+    try{
+        $abnormal_sids = $mongotd->getCurrentAbnormalSids();
+        if(count($abnormal_sids) > 0){
+            echo 'Abnormal sids: ' . implode(',', $abnormal_sids) . "\n";
+        }
+    }catch(Exception $e){
+        echo "ERROR: " . $conn->db()->lastError()['err'] . "\n";
+        echo $e->getMessage();
     }
 
     echo "Time taken: " . (microtime(true) - $start) . "\n";
