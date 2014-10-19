@@ -6,7 +6,7 @@ class AggregatorSubHour{
     /** @var  LoggerInterface */
     private $logger;
 
-    public function __construct(LoggerInterface $logger){
+    public function __construct(LoggerInterface $logger = NULL){
         $this->logger = $logger;
     }
 
