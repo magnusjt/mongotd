@@ -8,6 +8,9 @@ class Inserter{
     /** @var  DeltaConverter */
     private $delta_converter;
 
+    /** @var  AnomalyDetector */
+    private $anomaly_detector;
+
     /** @var \DateTime */
     private $datetime = NULL;
 
@@ -17,10 +20,11 @@ class Inserter{
     /** @var number[] */
     private $vals_by_sid_incremental = array();
 
-    public function __construct($gauge_inserter, $delta_converter){
-        $this->gauge_inserter  = $gauge_inserter;
-        $this->delta_converter = $delta_converter;
-        $this->utc_timezone    = new \DateTimeZone('UTC');
+    public function __construct($gauge_inserter, $delta_converter, $anomaly_detector){
+        $this->gauge_inserter   = $gauge_inserter;
+        $this->delta_converter  = $delta_converter;
+        $this->anomaly_detector = $anomaly_detector;
+        $this->utc_timezone     = new \DateTimeZone('UTC');
     }
 
     /**
@@ -60,9 +64,10 @@ class Inserter{
 
         if(count($this->vals_by_sid) > 0){
             $this->gauge_inserter->addBatch($this->vals_by_sid, $this->datetime);
+            $this->anomaly_detector->detectBatch($this->vals_by_sid, $this->datetime);
         }
 
-        $this->vals_by_sid = array();
+        $this->vals_by_sid             = array();
         $this->vals_by_sid_incremental = array();
     }
 }
