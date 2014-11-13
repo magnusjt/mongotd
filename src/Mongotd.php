@@ -35,11 +35,6 @@ class Mongotd{
         return new Retriever($this->conn, $aggregator, $this->logger);
     }
 
-    public function getCurrentAbnormalSids(){
-        $anomaly_detector = new AnomalyDetector($this->conn);
-        return $anomaly_detector->getAbnormalSids();
-    }
-
     private function ensureIndexes(){
         $this->conn->col('cv_prev')->ensureIndex(array('sid' => 1), array('unique' => true));
         $this->conn->col('cv')->ensureIndex(array('mongodate' => 1, 'sid' => 1), array('unique' => true));

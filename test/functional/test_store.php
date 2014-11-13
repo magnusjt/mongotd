@@ -7,6 +7,7 @@ $conn->dropDb();
 
 $mongotd = new \Mongotd\Mongotd($conn, null);
 $inserter = $mongotd->getInserter(\Mongotd\Resolution::FIVE_MINUTES);
+$retriever = $mongotd->getRetriever();
 $dateperiod = new DatePeriod(new DateTime('2014-09-10 00:00:00'), DateInterval::createFromDateString('5 minutes'), new DateTime('2014-09-20 05:00:00'));
 
 foreach($dateperiod as $datetime){
@@ -27,9 +28,11 @@ foreach($dateperiod as $datetime){
     }
 
     try{
-        $abnormal_sids = $mongotd->getCurrentAbnormalSids();
-        if(count($abnormal_sids) > 0){
-            echo 'Abnormal sids: ' . implode(',', $abnormal_sids) . "\n";
+        $abnormals = $retriever->getCurrentAbnormal();
+        if(count($abnormals) > 0){
+            foreach($abnormals as $abnormal){
+                echo $abnormal['sid'] . ', Val: ' . $abnormal['val'] . ', Predicted: ' . $abnormal['pred'] . "\n";
+            }
         }
     }catch(Exception $e){
         echo "ERROR: " . $conn->db()->lastError()['err'] . "\n";

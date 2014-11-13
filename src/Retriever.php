@@ -45,6 +45,28 @@ class Retriever{
     }
 
     /**
+     * @param $threshold int Number of anomalies in a row required for it to be considered abnormal
+     *
+     * @return array
+     */
+    public function getCurrentAbnormal($threshold = 3){
+        $col = $this->conn->col('acache');
+
+        $cursor = $col->find(array('anomalies' => array('$gte' => $threshold)), array(
+            'sid'  => 1,
+            'pred' => 1,
+            'val'  => 1
+        ))->sort(array('anomalies' => -1));
+
+        $docs = array();
+        foreach($cursor as $doc){
+            $docs[] = $doc;
+        }
+
+        return $docs;
+    }
+
+    /**
      * @param $vals_by_date array
      * @param $resolution int
      * @param $start \DateTime
