@@ -31,7 +31,9 @@ echo "
 [xdebug]
 xdebug.remote_host=10.0.2.2
 xdebug.remote_enable=on
-xdebug.remote_connect_back=off" >> /etc/php.ini
+xdebug.remote_connect_back=off
+xdebug.profiler_enable=off
+xdebug.profiler_output_dir=/vagrant/profiles" >> /etc/php.ini
 
 # Start services
 service httpd start
