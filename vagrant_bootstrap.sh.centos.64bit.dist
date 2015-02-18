@@ -40,7 +40,7 @@ service httpd start
 service mongod start
 
 # Make sure services start on system startup
-chkconfig http on
+chkconfig httpd on
 chkconfig mongod on
 
 # Link test/functional/web to web page found at /web
