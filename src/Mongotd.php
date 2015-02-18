@@ -16,7 +16,6 @@ class Mongotd{
     public function __construct($conn, LoggerInterface $logger = null){
         $this->conn = $conn;
         $this->logger = $logger;
-        $this->ensureIndexes();
     }
 
     public function getInserter($resolution = Resolution::FIFTEEEN_MINUTES){
@@ -35,11 +34,9 @@ class Mongotd{
         return new Retriever($this->conn, $aggregator, $this->logger);
     }
 
-    private function ensureIndexes(){
-        $this->conn->col('cv_prev')->ensureIndex(array('sid' => 1), array('unique' => true));
-        $this->conn->col('cv')->ensureIndex(array('mongodate' => 1, 'sid' => 1), array('unique' => true));
-        $this->conn->col('acache')->ensureIndex(array('sid' => 1), array('unique' => true));
-       // $this->conn->col('cv')->ensureIndex(array('mongodate' => 1));
-       // $this->conn->col('cv')->ensureIndex(array('hours' => 1));
+    public function ensureIndexes(){
+        $this->conn->col('cv_prev')->ensureIndex(array('sid' => 1, 'nid' => 1), array('unique' => true));
+        $this->conn->col('cv')->ensureIndex(array('mongodate' => 1, 'sid' => 1, 'nid' => 1), array('unique' => true));
+        $this->conn->col('acache')->ensureIndex(array('sid' => 1, 'nid' => 1), array('unique' => true));
     }
 }
