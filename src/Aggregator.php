@@ -21,15 +21,16 @@ class Aggregator{
     }
 
     /**
-     * @param $sid mixed
-     * @param $start \DateTime
-     * @param $end \DateTime
-     * @param $resolution int
-     * @param $aggregation int
+     * @param $sid             int|string
+     * @param $nid             int|string
+     * @param $start           \DateTime
+     * @param $end             \DateTime
+     * @param $resolution      int
+     * @param $aggregation     int
      * @param $target_timezone \DateTimeZone
      * @return array
      */
-    public function aggregate($sid, $start, $end, $resolution, $aggregation, $target_timezone){
+    public function aggregate($sid, $nid, $start, $end, $resolution, $aggregation, $target_timezone){
         if($resolution < 0){
             throw new \InvalidArgumentException('Resolution must be a positive number');
         }
@@ -56,6 +57,7 @@ class Aggregator{
 
         $cursor = $this->conn->col('cv')->find(array(
                                                    'sid'       => $sid,
+                                                   'nid'       => $nid,
                                                    'mongodate' => array('$gte' => new \MongoDate($start->getTimestamp()),
                                                                         '$lte' => new \MongoDate($end->getTimestamp()))
                                                ),

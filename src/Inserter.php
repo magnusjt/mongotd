@@ -11,63 +11,56 @@ class Inserter{
     /** @var  AnomalyDetector */
     private $anomaly_detector;
 
-    /** @var \DateTime */
-    private $datetime = NULL;
+    /** @var CounterValue[] */
+    private $cvs = array();
 
-    /** @var number[] */
-    private $vals_by_sid = array();
-
-    /** @var number[] */
-    private $vals_by_sid_incremental = array();
+    /** @var CounterValue[] */
+    private $cvs_incremental = array();
 
     public function __construct($gauge_inserter, $delta_converter, $anomaly_detector){
         $this->gauge_inserter   = $gauge_inserter;
         $this->delta_converter  = $delta_converter;
         $this->anomaly_detector = $anomaly_detector;
-        $this->utc_timezone     = new \DateTimeZone('UTC');
+
+        $this->counter_values             = array();
+        $this->counter_values_incremental = array();
     }
 
     /**
-     * @param $sid mixed
-     * @param $value number
+     * @param $sid            int|string
+     * @param $nid            int|string
+     * @param $datetime       \DateTime
+     * @param $value          number
      * @param $is_incremental bool
      */
-    public function add($sid, $value, $is_incremental = false){
+    public function add($sid, $nid, $datetime, $value, $is_incremental = false){
         if(!is_numeric($value)){
             throw new \InvalidArgumentException('Value should be numeric');
         }
 
+        $datetime = clone $datetime;
+        $datetime->setTimezone(new \DateTimeZone('UTC'));
+        $cv = new CounterValue($sid, $nid, $datetime, $value);
+
         if($is_incremental){
-            $this->vals_by_sid_incremental[$sid] = $value;
+            $this->cvs_incremental[] = $cv;
         }else{
-            $this->vals_by_sid[$sid] = $value;
+            $this->cvs[] = $cv;
         }
     }
 
-    public function setDatetime(\DateTime $datetime){
-        $this->datetime = clone $datetime;
-        $this->datetime->setTimezone(new \DateTimeZone('UTC'));
-    }
-
-    public function execute(){
-        if($this->datetime === NULL){
-            throw new \InvalidArgumentException("DateTime wasn't set");
+    public function insert(){
+        if(count($this->cvs_incremental) > 0){
+            $cvs = $this->delta_converter->convert($this->cvs_incremental);
+            $this->cvs = array_merge($this->cvs, $cvs);
         }
 
-        if(count($this->vals_by_sid_incremental) > 0){
-            $vals_by_sid_delta_calculated = $this->delta_converter->convert($this->vals_by_sid_incremental, $this->datetime);
-
-            foreach($vals_by_sid_delta_calculated as $sid => $val){
-                $this->vals_by_sid[$sid] = $val;
-            }
+        if(count($this->cvs) > 0){
+            $this->gauge_inserter->addBatch($this->cvs);
+            $this->anomaly_detector->detectBatch($this->cvs);
         }
 
-        if(count($this->vals_by_sid) > 0){
-            $this->gauge_inserter->addBatch($this->vals_by_sid, $this->datetime);
-            $this->anomaly_detector->detectBatch($this->vals_by_sid, $this->datetime);
-        }
-
-        $this->vals_by_sid             = array();
-        $this->vals_by_sid_incremental = array();
+        $this->cvs = array();
+        $this->cvs_incremental = array();
     }
 }

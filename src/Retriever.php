@@ -24,22 +24,24 @@ class Retriever{
     }
 
     /**
-     * @param $sid mixed
-     * @param $start_in \DateTime
-     * @param $end_in \DateTime
-     * @param int $resolution int
-     * @param int $aggregation int
-     * @param $padding mixed
+     * @param $sid         int|string
+     * @param $nid         int|string
+     * @param $start_in    \DateTime
+     * @param $end_in      \DateTime
+     * @param $resolution  int
+     * @param $aggregation int
+     * @param $padding     mixed
+     *
      * @return array
      */
-    public function get($sid, $start_in, $end_in, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
+    public function get($sid, $nid, $start_in, $end_in, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
         $target_timezone = $start_in->getTimezone();
 
         $start = clone $start_in;
         $end = clone $end_in;
         $this->adjustDatetimesToResolution($resolution, $start, $end);
 
-        $vals_by_date = $this->aggregator->aggregate($sid, $start, $end,  $resolution, $aggregation, $target_timezone);
+        $vals_by_date = $this->aggregator->aggregate($sid, $nid, $start, $end,  $resolution, $aggregation, $target_timezone);
         $vals_by_date = $this->filterAndPadVals($vals_by_date, $resolution, $start, $end, $padding);
         return $vals_by_date;
     }
@@ -54,6 +56,7 @@ class Retriever{
 
         $cursor = $col->find(array('anomalies' => array('$gte' => $threshold)), array(
             'sid'  => 1,
+            'nid'  => 1,
             'pred' => 1,
             'val'  => 1
         ))->sort(array('anomalies' => -1));

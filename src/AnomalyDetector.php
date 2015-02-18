@@ -21,61 +21,78 @@ class AnomalyDetector{
         $this->conn = $conn;
     }
 
-    public function detectBatch($vals_by_sid, $datetime){
-        $col            = $this->conn->col('acache');
-        $batch_inserter = new \MongoInsertBatch($col);
+    /**
+     * @param $cvs CounterValue[]
+     */
+    public function detectBatch($cvs){
+        $col = $this->conn->col('acache');
         $batch_updater  = new \MongoUpdateBatch($col);
-        $season_index   = $this->getSeasonIndex($datetime);
-        $lookup         = $this->getCacheLookup($col, $season_index);
+        foreach($cvs as $cv){
+            $cache = new AnomalyCache();
+            $cache->sid = $cv->sid;
+            $cache->nid = $cv->nid;
 
-        $n_insert_jobs = 0;
-        $n_update_jobs = 0;
-        foreach($vals_by_sid as $sid => $val){
-            $update = false;
-            if(isset($lookup[$sid])){
-                $cache  = $lookup[$sid];
-                $update = true;
+            $season_index = $this->getSeasonIndex($cv->datetime);
+            $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid));
+
+            if($doc){
+                $cache->level = $doc['level'];
+                $cache->trend = $doc['trend'];
+                $cache->pred = $doc['pred'];
+                $cache->val = $doc['val'];
+                $cache->anomalies = $doc['anomalies'];
+                if(isset($doc['season'][$season_index])){
+                    $cache->s = $doc['season'][$season_index]['s'];
+                    $cache->dev = $doc['season'][$season_index]['dev'];
+                }
             }else{
-                $cache        = new AnomalyCache();
-                $cache->sid   = $sid;
-                $cache->level = $val;
+                $col->insert(array(
+                                 'sid'       => $cache->sid,
+                                 'nid'       => $cache->nid,
+                                 'level'     => $cache->level,
+                                 'trend'     => $cache->trend,
+                                 'pred'      => $cache->pred,
+                                 'val'       => $cache->val,
+                                 'anomalies' => $cache->anomalies,
+                                 'season'    => array($season_index => array('s' => $cache->s, 'dev' => $cache->dev))
+                             )
+                );
             }
 
-            $this->updateCache($cache, $val);
+            $this->updateAnomalyCache($cache, $cv->value);
 
-            if($update){
-                $batch_updater->add($this->getUpdateItemFromCache($cache, $season_index));
-                $n_update_jobs++;
-            }else{
-                $batch_inserter->add($this->getInsertItemFromCache($cache, $season_index));
-                $n_insert_jobs++;
-            }
-
-            if($n_insert_jobs > 100){
-                $batch_inserter->execute(array('w' => 1));
-                $n_insert_jobs = 0;
-            }
-
-            if($n_update_jobs > 100){
-                $batch_updater->execute(array('w' => 1));
-                $n_update_jobs = 0;
-            }
+            $batch_updater->add(array(
+                'q' => array('sid' => $cv->sid, 'nid' => $cv->nid),
+                'u' => array('$set' => array(
+                    'level'                            => $cache->level,
+                    'trend'                            => $cache->trend,
+                    'pred'                             => $cache->pred,
+                    'val'                              => $cache->val,
+                    'anomalies'                        => $cache->anomalies,
+                    'season.' . $season_index . '.s'   => $cache->s,
+                    'season.' . $season_index . '.dev' => $cache->dev,
+                ))
+            ));
         }
 
-        if($n_insert_jobs > 0){
-            $batch_inserter->execute(array('w' => 1));
-        }
+        $batch_updater->execute(array('w' => 1));
+    }
 
-        if($n_update_jobs > 0){
-            $batch_updater->execute(array('w' => 1));
-        }
+    /**
+     * @param $datetime \DateTime
+     *
+     * @return int
+     */
+    private function getSeasonIndex($datetime){
+        $minutes = floor($datetime->getTimestamp() / 60);
+        return $minutes % $this->season_length;
     }
 
     /**
      * @param $cache AnomalyCache
      * @param $val   number
      */
-    private function updateCache($cache, $val){
+    private function updateAnomalyCache($cache, $val){
         $level_prev    = $cache->level;
         $trend_prev    = $cache->trend;
         $seasonal_prev = $cache->s;
@@ -102,90 +119,5 @@ class AnomalyDetector{
         }else{
             $cache->anomalies = 0;
         }
-    }
-
-    /**
-     * @param $col          \MongoCollection
-     * @param $season_index number
-     *
-     * @return array
-     */
-    private function getCacheLookup($col, $season_index){
-        $cursor = $col->find();
-
-        $lookup = array();
-        foreach($cursor as $doc){
-            $cache            = new AnomalyCache();
-            $cache->sid       = $doc['sid'];
-            $cache->level     = $doc['level'];
-            $cache->anomalies = $doc['anomalies'];
-            $cache->trend     = $doc['trend'];
-            $cache->pred      = $doc['pred'];
-            $cache->val       = $doc['val'];
-            $cache->s         = 0;
-            $cache->dev       = 0;
-
-            if(isset($doc['season'][$season_index])){
-                $cache->s   = $doc['season'][$season_index]['s'];
-                $cache->dev = $doc['season'][$season_index]['dev'];
-            }
-
-            $lookup[$doc['sid']] = $cache;
-        }
-
-        return $lookup;
-    }
-
-    /**
-     * @param $cache        AnomalyCache
-     * @param $season_index number
-     *
-     * @return array
-     */
-    private function getUpdateItemFromCache($cache, $season_index){
-        $q = array('sid' => $cache->sid);
-        $u = array('$set' => array(
-            'level'                            => $cache->level,
-            'trend'                            => $cache->trend,
-            'pred'                             => $cache->pred,
-            'val'                              => $cache->val,
-            'anomalies'                        => $cache->anomalies,
-            'season.' . $season_index . '.s'   => $cache->s,
-            'season.' . $season_index . '.dev' => $cache->dev,
-        ));
-        return array('q' => $q, 'u' => $u);
-    }
-
-    /**
-     * @param $cache        AnomalyCache
-     * @param $season_index number
-     *
-     * @return array
-     */
-    private function getInsertItemFromCache($cache, $season_index){
-        return array(
-            'sid'       => $cache->sid,
-            'level'     => $cache->level,
-            'trend'     => $cache->trend,
-            'pred'      => $cache->pred,
-            'val'       => $cache->val,
-            'anomalies' => $cache->anomalies,
-            'season'    => array(
-                $season_index => array(
-                    's'   => $cache->s,
-                    'dev' => $cache->dev
-                )
-            )
-        );
-    }
-
-    /**
-     * @param $datetime \DateTime
-     *
-     * @return int
-     */
-    private function getSeasonIndex($datetime){
-        $minutes = floor($datetime->getTimestamp() / 60);
-        return $minutes % $this->season_length;
     }
 }

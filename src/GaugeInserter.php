@@ -23,78 +23,51 @@ class GaugeInserter{
     }
 
     /**
-     * @param $vals_by_sid number[]
-     * @param $datetime \DateTime
+     * @param $cvs CounterValue[]
      */
-    public function addBatch($vals_by_sid, $datetime){
+    public function addBatch($cvs){
         $col            = $this->conn->col('cv');
         $batch_inserter = new \MongoInsertBatch($col);
         $batch_updater  = new \MongoUpdateBatch($col);
 
-        $date_only            = clone $datetime;
-        $date_only            = $date_only->setTime(0, 0, 0);
-        $mongodate            = new \MongoDate($date_only->getTimestamp());
-        $existing_sids_lookup = $this->getExistingSidsLookup($col, $mongodate);
-        $empty_doc            = $this->getEmptyDoc($mongodate);
+        $inserts_needed = false;
+        foreach($cvs as $cv){
+            $datetime = clone $cv->datetime;
+            $hour   = (int)$datetime->format('H');
+            $minute = (int)$datetime->format('i');
+            $minute -= $minute%$this->resolution; // Clamp minute to nearest minute with resolution
 
-        $hour   = (int)$datetime->format('H');
-        $minute = (int)$datetime->format('i');
-        $minute -= $minute%$this->resolution; // Clamp minute to nearest minute
+            // A new doc is stored on a daily basis, so find a unique date value for this day
+            $datetime->setTime(0,0,0);
+            $mongodate = new \MongoDate($datetime->getTimestamp());
 
-        $n_insert_jobs = 0;
-        $n_update_jobs = 0;
-        foreach($vals_by_sid as $sid => $val){
-            $update_item = $this->getUpdateItem($sid, $val, $mongodate, $hour, $minute);
-            $batch_updater->add($update_item);
-            $n_update_jobs++;
+            $batch_updater->add(array(
+                'q' => array('sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate),
+                'u' => array('$set' => array('hours.' . $hour . '.' . $minute => $cv->value))
+            ));
 
-            if(!isset($existing_sids_lookup[$sid])){
-                $empty_doc['sid'] = $sid;
-                unset($empty_doc['_id']); // Batch inserter adds an ID to the document which we don't want to keep
-                $batch_inserter->add($empty_doc);
-                $n_insert_jobs++;
-            }
-
-            if($n_update_jobs > 100){
-                if($n_insert_jobs > 0){
-                    $batch_inserter->execute(array('w' => 1));
-                    $n_insert_jobs = 0;
-                }
-
-                $batch_updater->execute(array('w' => 1));
-                $n_update_jobs = 0;
+            $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate), array('sid' => 1));
+            if(!$doc){
+                $batch_inserter->add($this->getEmptyDoc($cv->sid, $cv->nid, $mongodate));
+                $inserts_needed = true;
             }
         }
 
-        if($n_insert_jobs > 0){
+        if($inserts_needed){
             $batch_inserter->execute(array('w' => 1));
         }
 
-        if($n_update_jobs > 0){
-            $batch_updater->execute(array('w' => 1));
-        }
+        $batch_updater->execute(array('w' => 1));
     }
 
     /**
-     * @param $col \MongoCollection
+     * @param $sid int|string
+     * @param $nid int|string
      * @param $mongodate \MongoDate
+     *
      * @return array
      */
-    private function getExistingSidsLookup($col, $mongodate){
-        $cursor = $col->find(array('mongodate' => $mongodate), array('sid' => 1));
-        $sids   = array();
-        foreach($cursor as $doc){
-            $sids[$doc['sid']] = $doc['sid'];
-        }
-
-        return $sids;
-    }
-
-    /**
-     * @param $mongodate \MongoDate
-     * @return array
-     */
-    private function getEmptyDoc($mongodate){
+    private function getEmptyDoc($sid, $nid, $mongodate){
         $minutes = array();
         for($minute = 0; $minute < 60; $minute += $this->resolution){
             $minutes[$minute] = false;
@@ -106,26 +79,10 @@ class GaugeInserter{
         }
 
         return array(
-            'sid'       => 0,
+            'sid'       => $sid,
+            'nid'       => $nid,
             'mongodate' => $mongodate,
             'hours'     => $hours,
         );
-    }
-
-    /**
-     * @param $sid mixed
-     * @param $val number
-     * @param $mongodate \MongoDate
-     * @param $hour int
-     * @param $minute int
-     * @return array
-     */
-    private function getUpdateItem($sid, $val, $mongodate, $hour, $minute){
-        $q = array('sid' => $sid, 'mongodate' => $mongodate);
-        $u = array(
-            '$set' => array('hours.' . $hour . '.' . $minute => $val)
-        );
-
-        return array("q" => $q, "u" => $u);
     }
 }

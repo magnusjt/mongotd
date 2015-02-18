@@ -2,6 +2,7 @@
 
 class AnomalyCache{
     public $sid       = NULL;
+    public $nid       = NULL;
     public $level     = 0;
     public $trend     = 0;
     public $pred      = NULL;
