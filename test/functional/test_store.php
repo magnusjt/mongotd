@@ -6,26 +6,31 @@ $conn = new \Mongotd\Connection('localhost', 'mongotdtest', 'mongotdtest');
 $conn->dropDb();
 
 $mongotd = new \Mongotd\Mongotd($conn, null);
+$mongotd->ensureIndexes();
 $inserter = $mongotd->getInserter(\Mongotd\Resolution::FIVE_MINUTES);
 $retriever = $mongotd->getRetriever();
 $dateperiod = new DatePeriod(new DateTime('2014-09-10 00:00:00'), DateInterval::createFromDateString('5 minutes'), new DateTime('2014-09-20 05:00:00'));
 
+/** @var \DateTime $datetime */
 foreach($dateperiod as $datetime){
     $start = microtime(true);
-    $inserter->setDatetime($datetime);
 
     echo $datetime->format("Y-m-d H:i:s") . "\n";
 
-    for($sid = 1; $sid <= 1; $sid++){
-        $inserter->add($sid, $sid*100 + 100*sin(2*pi()*(($datetime->getTimestamp()/60)%1440)/1440) + rand()%20);
+    for($nid = 1; $nid <= 3; $nid++){
+        for($sid = 1; $sid <= 100; $sid++){
+            $inserter->add($sid, $nid, $datetime, $sid*100 + 100*sin(2*pi()*(($datetime->getTimestamp()/60)%1440)/1440) + rand()%20);
+        }
     }
 
     try{
-        $inserter->execute();
+        $inserter->insert();
     }catch(Exception $e){
         echo "ERROR: " . $conn->db()->lastError()['err'] . "\n";
         echo $e->getMessage();
     }
+
+    break;
 
     try{
         $abnormals = $retriever->getCurrentAbnormal();
