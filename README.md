@@ -5,10 +5,6 @@ Timeseries database for mongodb and PHP
 
 Currently in alpha stage
 
-### TODO
-* Aggregation collections (cached rollup)
-* Sids (sensor id) that can be something other than a primitive type?
-
 ### Basic usage
 
 First we grab a mongodb connection and initialize mongotd.
@@ -26,18 +22,18 @@ the resolution to use. Any datetimes used later on will be rounded to
 this resolution, and space will be allocated accordingly. The maximum
 resolution is 1 hour, at which point only one data point is stored every hour.
 
-When inserting data, we first specify the datetime to use for all points we
-are currently inserting. Next we add a bunch of values with given sensor ids,
-and an indication on whether the sensor is incremental (constantly increasing).
-If the latter, the values are delta-calculated before insertion.
+Inserting data is done in batches. Add counter values
+with sensor id (sid), node id (nid), datetime, value,
+and a bool true if the counter is always increasing.
 
-When we have added all data points, we run the execute function.
-The points are then batch inserted into mongodb.
+When all counter values are added, run the insert function.
+The values are then batch inserted into mongodb.
 ````php
 $insert_resolution = \Mongotd\Resolution::FIVE_MINUTES;
 $inserter = $mongotd->getInserter($insert_resolution);
 
-$inserter->setDateTime(new \DateTime('now'));
+$datetime = new \DateTime('now');
+$node_id = 1;
 
 $sensor_id1 = 1;
 $sensor_id2 = 2;
@@ -49,10 +45,10 @@ $value3 = 50;
 
 $is_incremental = false;
 
-$inserter->add($sensor_id1, $value1, $is_incremental);
-$inserter->add($sensor_id2, $value2, $is_incremental);
-$inserter->add($sensor_id3, $value3, $is_incremental);
-$inserter->execute();
+$inserter->add($sensor_id1, $node_id, $datetime, $value1, $is_incremental);
+$inserter->add($sensor_id2, $node_id, $datetime, $value2, $is_incremental);
+$inserter->add($sensor_id3, $node_id, $datetime, $value3, $is_incremental);
+$inserter->insert();
 ````
 
 To get the timeseries data out of the database, we use the retriever.
@@ -61,7 +57,7 @@ optional padding value which will be used if no data is found for a given dateti
 The result set is given as an associative array with the datetime string as the key.
 ````php
 $retriever = $mongotd->getRetriever();
-$values_by_date = $retriever->get($sensor_id, new DateTime('-1 day'), new DateTime('now'), \Mongotd\Resolution::DAY, \Mongotd\Aggregation::SUM);
+$values_by_date = $retriever->get($sensor_id, $node_id, new DateTime('-1 day'), new DateTime('now'), \Mongotd\Resolution::DAY, \Mongotd\Aggregation::SUM);
 
 foreach($values_by_date as $date_str => $value){
     // Graph the values
@@ -79,7 +75,8 @@ $threshold = 3;
 $abnormals = $retriever->getCurrentAbnormal($threshold);
 foreach($abnormals as $abnormal){
     echo 'Abnormal value found: ' .
-            $abnormal['sid'] .
+            'Sensor ID: ' . $abnormal['sid'] .
+            ', Node ID: ' . $abnormal['nid'] .
             ', Actual value: ' .
             $abnormal['val'] .
             ', Predicted value: ' .
@@ -88,3 +85,7 @@ foreach($abnormals as $abnormal){
 }
 ````
 
+### Using vagrant setup
+Vagrantfiles have been provided for easier testing.
+Just rename the dist files to vagrant_bootstrap.sh and Vagrantfile, and run vagrant up.
+Everything should be installed and configured automatically.
