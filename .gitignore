@@ -1,4 +1,8 @@
 .idea/
+.vagrant/
+profiles/
 vendor/
 phpunit.xml
 start_mongo.bat
+Vagrantfile
+vagrant_bootstrap.sh
