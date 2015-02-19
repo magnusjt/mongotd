@@ -20,7 +20,7 @@ class Mongotd{
 
     public function getInserter($resolution = Resolution::FIFTEEEN_MINUTES){
         $gauge_inserter = new GaugeInserter($this->conn, $resolution, $this->logger);
-        $delta_converter = new DeltaConverter($this->conn, $this->logger);
+        $delta_converter = new DeltaConverter($this->conn, $resolution, $this->logger);
         $anomaly_detector = new AnomalyDetector($this->conn);
         return new Inserter($gauge_inserter, $delta_converter, $anomaly_detector);
     }
