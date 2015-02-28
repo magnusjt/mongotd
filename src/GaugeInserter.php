@@ -12,7 +12,7 @@ class GaugeInserter{
     /** @var int */
     private $interval;
 
-    private $secondsInDay = 86400;
+    private $secondsInADay = 86400;
 
     public function __construct($conn, $interval = 300, LoggerInterface $logger = NULL){
         $this->conn = $conn;
@@ -23,18 +23,21 @@ class GaugeInserter{
     /**
      * @param $cvs CounterValue[]
      */
-    public function addBatch($cvs){
+    public function insert($cvs){
         $col = $this->conn->col('cv');
         $batchUpdate = new \MongoUpdateBatch($col);
 
         foreach($cvs as $cv){
-            $mongodate = new \MongoDate(DateTimeHelper::clampToDay($cv->datetime)->getTimestamp());
+            $timestamp = $cv->datetime->getTimestamp();
+            $secondsIntoThisDay = $timestamp%$this->secondsInADay;
+            $mongodate = new \MongoDate($timestamp - $secondsIntoThisDay);
+
             $this->preAllocateIfNecessary($col, $cv->sid, $cv->nid, $mongodate);
 
-            $seconds = $cv->datetime->getTimestamp()%$this->secondsInDay;
+            $secondsClampedToInterval = $secondsIntoThisDay - $secondsIntoThisDay%$this->interval;
             $batchUpdate->add(array(
                 'q' => array('sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate),
-                'u' => array('$set' => array('vals.' . $seconds => $cv->value))
+                'u' => array('$set' => array('vals.' . $secondsClampedToInterval => $cv->value))
             ));
         }
 
@@ -46,11 +49,14 @@ class GaugeInserter{
      * @param $sid int
      * @param $nid int
      * @param $mongodate \MongoDate
+     *
+     * Preallocate a days worth of data. Only done once a day, so shouldn't be too taxing.
+     * The thing that takes time is checking for existing data.
      */
     private function preAllocateIfNecessary($col, $sid, $nid, $mongodate){
         if($col->find(array('sid' => $sid, 'nid' => $nid, 'mongodate' => $mongodate), array('sid' => 1))->limit(1)->count() == 0){
             $valsPerSec = array();
-            for($second = 0; $second < $this->secondsInDay; $second += $this->interval){
+            for($second = 0; $second < $this->secondsInADay; $second += $this->interval){
                 $valsPerSec[$second] = null;
             }
 
