@@ -31,27 +31,23 @@ class DeltaConverter{
     public function convert($cvs){
         $cvsDelta = array();
         $col = $this->conn->col('cv_prev');
-        $batchUpdate = new \MongoUpdateBatch($col);
 
         foreach($cvs as $cv){
-            $mongodate = new \MongoDate($cv->datetime->getTimestamp());
-            $batchUpdate->add(array(
-                                    'q' => array('sid' => $cv->sid, 'nid' => $cv->nid),
-                                    'u' => array('$set' => array('mongodate' => $mongodate, 'value' => $cv->value)),
-                                    'upsert' => true
-                                ));
+            $timestamp = $cv->datetime->getTimestamp();
+            $mongodate = new \MongoDate($timestamp);
 
             $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid), array('mongodate' => 1, 'value' => 1));
             if($doc){
-                $datetimePrev = new \DateTime('@'.$doc['mongodate']->sec, new \DateTimeZone('UTC'));
-                $delta = $this->getDeltaValue($cv->value, $doc['value'], $cv->datetime, $datetimePrev);
+                $delta = $this->getDeltaValue($cv->value, $doc['value'], $timestamp, $doc['mongodate']->sec);
                 if($delta !== false){
                     $cvsDelta[] = new CounterValue($cv->sid, $cv->nid, $cv->datetime, $delta);
                 }
             }
-        }
 
-        $batchUpdate->execute(array('w' => 1));
+            $col->update(array('sid' => $cv->sid, 'nid' => $cv->nid),
+                         array('$set' => array('mongodate' => $mongodate, 'value' => $cv->value)),
+                         array('upsert' => true));
+        }
 
         return $cvsDelta;
     }
@@ -59,15 +55,20 @@ class DeltaConverter{
     /**
      * @param $value number
      * @param $valuePrev number
-     * @param $datetime \DateTime
-     * @param $datetimePrev \DateTime
+     * @param $timestamp int
+     * @param $timestampPrev int
      * @return number|bool
+     *
+     * Returns difference between current and previous value.
+     * Scales the result so it becomes the difference as it would
+     * have been during a single interval. If the values are spaced
+     * more than 3 intervals apart, false is returned to avoid
+     * using delta-calculations between values too far apart.
      */
-    private function getDeltaValue($value, $valuePrev, $datetime, $datetimePrev){
-        $secondsPast = $datetime->diff($datetimePrev)->s;
+    private function getDeltaValue($value, $valuePrev, $timestamp, $timestampPrev){
+        $secondsPast = $timestamp - $timestampPrev;
 
         $deltaValue = false;
-        // Maximum 3 intervals wait. Any longer and the delta has increasing chance of error.
         if($secondsPast > 0 and $secondsPast <= 3*$this->interval){
             $deltaValue = ($value - $valuePrev) * ($this->interval / $secondsPast);
         }
