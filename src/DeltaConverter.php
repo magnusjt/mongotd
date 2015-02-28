@@ -10,31 +10,32 @@ class DeltaConverter{
     private $logger;
 
     /** @var int  */
-    private $resolution;
+    private $interval;
 
-    public function __construct($conn, $resolution, LoggerInterface $logger = NULL){
+    /**
+     * @param $conn Connection
+     * @param $interval int
+     * @param LoggerInterface $logger
+     */
+    public function __construct($conn, $interval, LoggerInterface $logger = NULL){
         $this->conn   = $conn;
         $this->logger = $logger;
-        $this->resolution = $resolution;
-
-        if($this->resolution > Resolution::HOUR){
-            $this->resolution = Resolution::HOUR;
-        }
+        $this->interval = $interval;
     }
 
     /**
      * @param $cvs CounterValue[]
      *
-     * @return array
+     * @return CounterValue[]
      */
     public function convert($cvs){
+        $cvsDelta = array();
         $col = $this->conn->col('cv_prev');
-        $batch_updater  = new \MongoUpdateBatch($col);
-        $cvs_delta = array();
+        $batchUpdate = new \MongoUpdateBatch($col);
 
         foreach($cvs as $cv){
             $mongodate = new \MongoDate($cv->datetime->getTimestamp());
-            $batch_updater->add(array(
+            $batchUpdate->add(array(
                                     'q' => array('sid' => $cv->sid, 'nid' => $cv->nid),
                                     'u' => array('$set' => array('mongodate' => $mongodate, 'value' => $cv->value)),
                                     'upsert' => true
@@ -42,32 +43,35 @@ class DeltaConverter{
 
             $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid), array('mongodate' => 1, 'value' => 1));
             if($doc){
-                $datetime_prev = new \DateTime();
-                $datetime_prev->setTimezone(new \DateTimeZone('UTC'));
-                $datetime_prev->setTimestamp($doc['mongodate']->sec);
-                $delta = $this->getDeltaValue($cv->value, $doc['value'], $cv->datetime, $datetime_prev);
+                $datetimePrev = new \DateTime('@'.$doc['mongodate']->sec, new \DateTimeZone('UTC'));
+                $delta = $this->getDeltaValue($cv->value, $doc['value'], $cv->datetime, $datetimePrev);
                 if($delta !== false){
-                    $cvs_delta[] = new CounterValue($cv->sid, $cv->nid, $cv->datetime, $delta);
+                    $cvsDelta[] = new CounterValue($cv->sid, $cv->nid, $cv->datetime, $delta);
                 }
             }
         }
 
-        $batch_updater->execute(array('w' => 1));
+        $batchUpdate->execute(array('w' => 1));
 
-        return $cvs_delta;
+        return $cvsDelta;
     }
 
-    private function getDeltaValue($value, $value_prev, $datetime, $datetime_prev){
-        $minutes_past = $datetime->diff($datetime_prev)->i;
+    /**
+     * @param $value number
+     * @param $valuePrev number
+     * @param $datetime \DateTime
+     * @param $datetimePrev \DateTime
+     * @return number|bool
+     */
+    private function getDeltaValue($value, $valuePrev, $datetime, $datetimePrev){
+        $secondsPast = $datetime->diff($datetimePrev)->s;
 
-        $delta_value = false;
-        if($minutes_past > 0 and $minutes_past < 60){
-            $delta_value = ($value - $value_prev) * ($this->resolution / $minutes_past);
-            if($delta_value < 0){
-                $delta_value = false;
-            }
+        $deltaValue = false;
+        // Maximum 3 intervals wait. Any longer and the delta has increasing chance of error.
+        if($secondsPast > 0 and $secondsPast <= 3*$this->interval){
+            $deltaValue = ($value - $valuePrev) * ($this->interval / $secondsPast);
         }
 
-        return $delta_value;
+        return $deltaValue;
     }
 }
