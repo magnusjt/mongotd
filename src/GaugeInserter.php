@@ -9,80 +9,58 @@ class GaugeInserter{
     /** @var  LoggerInterface */
     private $logger;
 
-    /** @var int  */
-    private $resolution;
+    /** @var int */
+    private $interval;
 
-    public function __construct($conn, $resolution, LoggerInterface $logger = NULL){
+    private $secondsInDay = 86400;
+
+    public function __construct($conn, $interval = 300, LoggerInterface $logger = NULL){
         $this->conn       = $conn;
         $this->logger     = $logger;
-        $this->resolution = $resolution;
-
-        if($this->resolution > Resolution::HOUR){
-            $this->resolution = Resolution::HOUR;
-        }
+        $this->interval = $interval;
     }
 
     /**
      * @param $cvs CounterValue[]
      */
     public function addBatch($cvs){
-        $col            = $this->conn->col('cv');
-        $batch_inserter = new \MongoInsertBatch($col);
-        $batch_updater  = new \MongoUpdateBatch($col);
+        $col = $this->conn->col('cv');
+        $batchUpdate = new \MongoUpdateBatch($col);
 
-        $inserts_needed = false;
         foreach($cvs as $cv){
-            $datetime = clone $cv->datetime;
-            $hour   = (int)$datetime->format('H');
-            $minute = (int)$datetime->format('i');
-            $minute -= $minute%$this->resolution; // Clamp minute to nearest minute with resolution
+            $mongodate = new \MongoDate(DateTimeHelper::clampToDay($cv->datetime)->getTimestamp());
+            $this->preAllocateIfNecessary($col, $cv->sid, $cv->nid, $mongodate);
 
-            // A new doc is stored on a daily basis, so find a unique date value for this day
-            $datetime->setTime(0,0,0);
-            $mongodate = new \MongoDate($datetime->getTimestamp());
-
-            $batch_updater->add(array(
+            $seconds = $cv->datetime->getTimestamp()%$this->secondsInDay;
+            $batchUpdate->add(array(
                 'q' => array('sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate),
-                'u' => array('$set' => array('hours.' . $hour . '.' . $minute => $cv->value))
+                'u' => array('$set' => array('vals.' . $seconds => $cv->value))
             ));
-
-            $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate), array('sid' => 1));
-            if(!$doc){
-                $batch_inserter->add($this->getEmptyDoc($cv->sid, $cv->nid, $mongodate));
-                $inserts_needed = true;
-            }
         }
 
-        if($inserts_needed){
-            $batch_inserter->execute(array('w' => 1));
-        }
-
-        $batch_updater->execute(array('w' => 1));
+        $batchUpdate->execute(array('w' => 1));
     }
 
     /**
-     * @param $sid int|string
-     * @param $nid int|string
+     * @param $col \MongoCollection
+     * @param $sid int
+     * @param $nid int
      * @param $mongodate \MongoDate
-     *
-     * @return array
      */
-    private function getEmptyDoc($sid, $nid, $mongodate){
-        $minutes = array();
-        for($minute = 0; $minute < 60; $minute += $this->resolution){
-            $minutes[$minute] = false;
-        }
+    private function preAllocateIfNecessary($col, $sid, $nid, $mongodate){
+        if($col->find(array('sid' => $sid, 'nid' => $nid, 'mongodate' => $mongodate), array('sid' => 1))->limit(1)->count() == 0){
+            $valsPerSec = array();
+            for($second = 0; $second < $this->secondsInDay; $second += $this->interval){
+                $valsPerSec[$second] = null;
+            }
 
-        $hours = array();
-        for($hour = 0; $hour < 24; $hour++){
-            $hours[$hour] = $minutes;
-        }
+            $col->insert(array(
+                             'sid'       => $sid,
+                             'nid'       => $nid,
+                             'mongodate' => $mongodate,
+                             'vals'      => $valsPerSec,
+                         ));
 
-        return array(
-            'sid'       => $sid,
-            'nid'       => $nid,
-            'mongodate' => $mongodate,
-            'hours'     => $hours,
-        );
+        }
     }
 }
