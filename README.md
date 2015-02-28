@@ -89,3 +89,6 @@ foreach($abnormals as $abnormal){
 Vagrantfiles have been provided for easier testing.
 Just rename the dist files to vagrant_bootstrap.sh and Vagrantfile, and run vagrant up.
 Everything should be installed and configured automatically.
+
+Note: If the machine has an unclean shutdown, the mongod.lock file will often be outdated, and mongod won't startup.
+To resolve, just delete /var/lib/mongo/mongod.lock
