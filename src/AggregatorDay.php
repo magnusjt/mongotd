@@ -13,20 +13,20 @@ class AggregatorDay{
     /**
      * @param $cursor \MongoCursor
      * @param $aggregation int
-     * @param $target_timezone \DateTimeZone
+     * @param $targetTimezone \DateTimeZone
      * @return array
      */
-    public function aggregate($cursor, $aggregation, $target_timezone){
-        $stats_by_date = array();
+    public function aggregate($cursor, $aggregation, $targetTimezone){
+        $statsByDate = array();
         foreach($cursor as $doc){
             $date = new \DateTime();
             $date->setTimezone(new \DateTimeZone('UTC'));
             $date->setTimestamp($doc['mongodate']->sec);
 
-            foreach($doc['hours'] as $hour => $vals_by_minute){
+            foreach($doc['hours'] as $hour => $valsByMinute){
                 $n = 0;
                 $sum = 0;
-                foreach($vals_by_minute as $val){
+                foreach($valsByMinute as $val){
                     if(is_numeric($val)){
                         $n++;
                         $sum += $val;
@@ -35,29 +35,29 @@ class AggregatorDay{
 
                 if($n > 0){
                     $date->setTime($hour, 0, 0);
-                    $date_in_target_timezone = clone $date;
-                    $date_in_target_timezone->setTimezone($target_timezone);
+                    $dateInTargetTimezone = clone $date;
+                    $dateInTargetTimezone->setTimezone($targetTimezone);
 
-                    $date_str = $date_in_target_timezone->format('Y-m-d 00:00:00');
-                    if(isset($stats_by_date[$date_str])){
-                        $stats_by_date[$date_str]['n'] += $n;
-                        $stats_by_date[$date_str]['sum'] += $sum;
+                    $dateStr = $dateInTargetTimezone->format('Y-m-d 00:00:00');
+                    if(isset($statsByDate[$dateStr])){
+                        $statsByDate[$dateStr]['n'] += $n;
+                        $statsByDate[$dateStr]['sum'] += $sum;
                     }else{
-                        $stats_by_date[$date_str] = array('n' => $n, 'sum' => $sum);
+                        $statsByDate[$dateStr] = array('n' => $n, 'sum' => $sum);
                     }
                 }
             }
         }
 
-        $vals_by_date = array();
-        foreach($stats_by_date as $date_str => $stats){
+        $valsByDate = array();
+        foreach($statsByDate as $dateStr => $stats){
             if($aggregation == Aggregation::SUM){
-                $vals_by_date[$date_str] = $stats['sum'];
+                $valsByDate[$dateStr] = $stats['sum'];
             }else{
-                $vals_by_date[$date_str] = $stats['sum']/$stats['n'];
+                $valsByDate[$dateStr] = $stats['sum']/$stats['n'];
             }
         }
 
-        return $vals_by_date;
+        return $valsByDate;
     }
 }

@@ -28,21 +28,21 @@ class Mongotd{
      * down to the nearest interval point.
      */
     public function getInserter($interval = 300){
-        $gauge_inserter = new GaugeInserter($this->conn, $interval, $this->logger);
-        $delta_converter = new DeltaConverter($this->conn, $interval, $this->logger);
-        $anomaly_detector = new AnomalyDetector($this->conn);
-        return new Inserter($gauge_inserter, $delta_converter, $anomaly_detector);
+        $gaugeInserter = new GaugeInserter($this->conn, $interval, $this->logger);
+        $deltaConverter = new DeltaConverter($this->conn, $interval, $this->logger);
+        $anomalyDetector = new AnomalyDetector($this->conn);
+        return new Inserter($gaugeInserter, $deltaConverter, $anomalyDetector);
     }
 
     /**
      * @return Retriever
      */
     public function getRetriever(){
-        $aggregator_sub_hour = new AggregatorSubHour($this->logger);
-        $aggregator_hour = new AggregatorHour($this->logger);
-        $aggregator_day = new AggregatorDay($this->logger);
+        $aggregatorSubHour = new AggregatorSubHour($this->logger);
+        $aggregatorHour = new AggregatorHour($this->logger);
+        $aggregatorDay = new AggregatorDay($this->logger);
 
-        $aggregator = new Aggregator($this->conn, $aggregator_day, $aggregator_hour, $aggregator_sub_hour);
+        $aggregator = new Aggregator($this->conn, $aggregatorDay, $aggregatorHour, $aggregatorSubHour);
         return new Retriever($this->conn, $aggregator, $this->logger);
     }
 

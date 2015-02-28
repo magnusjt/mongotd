@@ -24,39 +24,39 @@ if(isset($_GET['aggregation'])) $aggregation = $_GET['aggregation'];
 if(isset($_GET['resolution'])) $resolution = $_GET['resolution'];
 
 $labels = array();
-$vals_by_date_list = array();
+$valsByDateList = array();
 
 foreach($sids as $sid){
     $sid = (int)trim($sid);
-    $vals_by_date_list[] = $retriever->get($sid, 1, new DateTime($start), new DateTime($end), $resolution, $aggregation, null);
+    $valsByDateList[] = $retriever->get($sid, 1, new DateTime($start), new DateTime($end), $resolution, $aggregation, null);
     $labels[] = "SID $sid";
 }
 
-$flot_str = valsByDateToFlot($vals_by_date_list, $labels);
+$flotStr = valsByDateToFlot($valsByDateList, $labels);
 
-function valsByDateToFlot($vals_by_date_list, $labels){
-    if(count($vals_by_date_list) == 0){
+function valsByDateToFlot($valsByDateList, $labels){
+    if(count($valsByDateList) == 0){
         throw new Exception("Empty data");
     }
 
-    if(count($vals_by_date_list) != count($labels)){
+    if(count($valsByDateList) != count($labels)){
         throw new Exception("Label count not equal to graph line count");
     }
 
-    $data_list = array();
-    $min_timestamp = 1000*strtotime(key($vals_by_date_list[0]));
-    end($vals_by_date_list[0]);
-    $max_timestamp = 1000*strtotime(key($vals_by_date_list[0]));
-    reset($vals_by_date_list[0]);
+    $dataList = array();
+    $minTimestamp = 1000*strtotime(key($valsByDateList[0]));
+    end($valsByDateList[0]);
+    $max_timestamp = 1000*strtotime(key($valsByDateList[0]));
+    reset($valsByDateList[0]);
 
-    for($i = 0; $i < count($vals_by_date_list); $i++){
+    for($i = 0; $i < count($valsByDateList); $i++){
         $data = array();
-        foreach($vals_by_date_list[$i] as $datetime_str => $val){
-            $datetime = new DateTime($datetime_str);
+        foreach($valsByDateList[$i] as $datetimeStr => $val){
+            $datetime = new DateTime($datetimeStr);
             $data[] = array($datetime->getTimestamp()*1000, $val);
         }
 
-        $data_list[] = array('data' => $data, 'label' => $labels[$i]);
+        $dataList[] = array('data' => $data, 'label' => $labels[$i]);
     }
 
     $options = array(
@@ -64,7 +64,7 @@ function valsByDateToFlot($vals_by_date_list, $labels){
             'mode' => 'time',
             'timezone' => 'browser',
             'timeformat' => "%d/%m \n %H:%M",
-            'min' => $min_timestamp,
+            'min' => $minTimestamp,
             'max' => $max_timestamp
         ),
         'series' => array(
@@ -73,7 +73,7 @@ function valsByDateToFlot($vals_by_date_list, $labels){
         )
     );
 
-    return '$.plot("#placeholder", ' . json_encode($data_list) . ', ' . json_encode($options) . ' );';
+    return '$.plot("#placeholder", ' . json_encode($dataList) . ', ' . json_encode($options) . ' );';
 }
 ?>
 <!DOCTYPE html>
@@ -87,7 +87,7 @@ function valsByDateToFlot($vals_by_date_list, $labels){
     <link rel="stylesheet" href="js/bootstrap-3.2.0-dist/css/bootstrap.min.css" />
     <script>
         $(document).ready(function(){
-            <?php echo $flot_str; ?>
+            <?php echo $flotStr; ?>
         });
     </script>
 </head>

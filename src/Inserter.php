@@ -3,37 +3,37 @@
 class Inserter{
 
     /** @var  GaugeInserter */
-    private $gauge_inserter;
+    private $gaugeInserter;
 
     /** @var  DeltaConverter */
-    private $delta_converter;
+    private $deltaConverter;
 
     /** @var  AnomalyDetector */
-    private $anomaly_detector;
+    private $anomalyDetector;
 
     /** @var CounterValue[] */
     private $cvs = array();
 
     /** @var CounterValue[] */
-    private $cvs_incremental = array();
+    private $cvsIncremental = array();
 
-    public function __construct($gauge_inserter, $delta_converter, $anomaly_detector){
-        $this->gauge_inserter   = $gauge_inserter;
-        $this->delta_converter  = $delta_converter;
-        $this->anomaly_detector = $anomaly_detector;
+    public function __construct($gaugeInserter, $deltaConverter, $anomalyDetector){
+        $this->gaugeInserter   = $gaugeInserter;
+        $this->deltaConverter  = $deltaConverter;
+        $this->anomalyDetector = $anomalyDetector;
 
-        $this->counter_values             = array();
-        $this->counter_values_incremental = array();
+        $this->cvs = array();
+        $this->cvsIncremental = array();
     }
 
     /**
-     * @param $sid            int|string
-     * @param $nid            int|string
-     * @param $datetime       \DateTime
-     * @param $value          number
-     * @param $is_incremental bool
+     * @param $sid           int|string
+     * @param $nid           int|string
+     * @param $datetime      \DateTime
+     * @param $value         number
+     * @param $isIncremental bool
      */
-    public function add($sid, $nid, $datetime, $value, $is_incremental = false){
+    public function add($sid, $nid, $datetime, $value, $isIncremental = false){
         if(!is_numeric($value)){
             throw new \InvalidArgumentException('Value should be numeric');
         }
@@ -42,25 +42,25 @@ class Inserter{
         $datetime->setTimezone(new \DateTimeZone('UTC'));
         $cv = new CounterValue($sid, $nid, $datetime, $value);
 
-        if($is_incremental){
-            $this->cvs_incremental[] = $cv;
+        if($isIncremental){
+            $this->cvsIncremental[] = $cv;
         }else{
             $this->cvs[] = $cv;
         }
     }
 
     public function insert(){
-        if(count($this->cvs_incremental) > 0){
-            $cvs = $this->delta_converter->convert($this->cvs_incremental);
+        if(count($this->cvsIncremental) > 0){
+            $cvs = $this->deltaConverter->convert($this->cvsIncremental);
             $this->cvs = array_merge($this->cvs, $cvs);
         }
 
         if(count($this->cvs) > 0){
-            $this->gauge_inserter->addBatch($this->cvs);
-            $this->anomaly_detector->detectBatch($this->cvs);
+            $this->gaugeInserter->addBatch($this->cvs);
+            $this->anomalyDetector->detectBatch($this->cvs);
         }
 
         $this->cvs = array();
-        $this->cvs_incremental = array();
+        $this->cvsIncremental = array();
     }
 }

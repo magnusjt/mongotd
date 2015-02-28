@@ -15,7 +15,7 @@ class AnomalyDetector{
     private $scale = 3;
 
     /** @var int How many minutes one season lasts */
-    private $season_length = 1440;
+    private $seasonLength = 1440;
 
     public function __construct($conn){
         $this->conn = $conn;
@@ -26,13 +26,13 @@ class AnomalyDetector{
      */
     public function detectBatch($cvs){
         $col = $this->conn->col('acache');
-        $batch_updater  = new \MongoUpdateBatch($col);
+        $batchUpdate  = new \MongoUpdateBatch($col);
         foreach($cvs as $cv){
             $cache = new AnomalyCache();
             $cache->sid = $cv->sid;
             $cache->nid = $cv->nid;
 
-            $season_index = $this->getSeasonIndex($cv->datetime);
+            $seasonIndex = $this->getSeasonIndex($cv->datetime);
             $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid));
 
             if($doc){
@@ -41,9 +41,9 @@ class AnomalyDetector{
                 $cache->pred = $doc['pred'];
                 $cache->val = $doc['val'];
                 $cache->anomalies = $doc['anomalies'];
-                if(isset($doc['season'][$season_index])){
-                    $cache->s = $doc['season'][$season_index]['s'];
-                    $cache->dev = $doc['season'][$season_index]['dev'];
+                if(isset($doc['season'][$seasonIndex])){
+                    $cache->s = $doc['season'][$seasonIndex]['s'];
+                    $cache->dev = $doc['season'][$seasonIndex]['dev'];
                 }
             }else{
                 $col->insert(array(
@@ -54,14 +54,14 @@ class AnomalyDetector{
                                  'pred'      => $cache->pred,
                                  'val'       => $cache->val,
                                  'anomalies' => $cache->anomalies,
-                                 'season'    => array($season_index => array('s' => $cache->s, 'dev' => $cache->dev))
+                                 'season'    => array($seasonIndex => array('s' => $cache->s, 'dev' => $cache->dev))
                              )
                 );
             }
 
             $this->updateAnomalyCache($cache, $cv->value);
 
-            $batch_updater->add(array(
+            $batchUpdate->add(array(
                 'q' => array('sid' => $cv->sid, 'nid' => $cv->nid),
                 'u' => array('$set' => array(
                     'level'                            => $cache->level,
@@ -69,13 +69,13 @@ class AnomalyDetector{
                     'pred'                             => $cache->pred,
                     'val'                              => $cache->val,
                     'anomalies'                        => $cache->anomalies,
-                    'season.' . $season_index . '.s'   => $cache->s,
-                    'season.' . $season_index . '.dev' => $cache->dev,
+                    'season.' . $seasonIndex . '.s'   => $cache->s,
+                    'season.' . $seasonIndex . '.dev' => $cache->dev,
                 ))
             ));
         }
 
-        $batch_updater->execute(array('w' => 1));
+        $batchUpdate->execute(array('w' => 1));
     }
 
     /**
@@ -85,7 +85,7 @@ class AnomalyDetector{
      */
     private function getSeasonIndex($datetime){
         $minutes = floor($datetime->getTimestamp() / 60);
-        return $minutes % $this->season_length;
+        return $minutes % $this->seasonLength;
     }
 
     /**
@@ -93,28 +93,28 @@ class AnomalyDetector{
      * @param $val   number
      */
     private function updateAnomalyCache($cache, $val){
-        $level_prev    = $cache->level;
-        $trend_prev    = $cache->trend;
-        $seasonal_prev = $cache->s;
-        $dev_prev      = $cache->dev;
+        $levelPrev    = $cache->level;
+        $trendPrev    = $cache->trend;
+        $seasonalPrev = $cache->s;
+        $devPrev      = $cache->dev;
 
-        $cache->pred = $level_prev + $trend_prev + $seasonal_prev;
+        $cache->pred = $levelPrev + $trendPrev + $seasonalPrev;
         $cache->val  = $val;
 
-        $upper = $cache->pred + $this->scale * $dev_prev;
-        $lower = $cache->pred - $this->scale * $dev_prev;
+        $upper = $cache->pred + $this->scale * $devPrev;
+        $lower = $cache->pred - $this->scale * $devPrev;
 
-        $is_anomaly = false;
+        $isAnomaly = false;
         if($val < $lower or $val > $upper){
-            $is_anomaly = true;
+            $isAnomaly = true;
         }
 
-        $cache->level = $this->alpha * ($val - $seasonal_prev) + (1 - $this->alpha) * ($level_prev + $trend_prev);
-        $cache->trend = $this->beta * ($cache->level - $level_prev) + (1 - $this->beta) * $trend_prev;
-        $cache->s     = $this->gamma * ($val - $level_prev - $trend_prev) + (1 - $this->gamma) * $seasonal_prev;
-        $cache->dev   = $this->gamma * abs($val - $cache->pred) + (1 - $this->gamma) * $dev_prev;
+        $cache->level = $this->alpha * ($val - $seasonalPrev) + (1 - $this->alpha) * ($levelPrev + $trendPrev);
+        $cache->trend = $this->beta * ($cache->level - $levelPrev) + (1 - $this->beta) * $trendPrev;
+        $cache->s     = $this->gamma * ($val - $levelPrev - $trendPrev) + (1 - $this->gamma) * $seasonalPrev;
+        $cache->dev   = $this->gamma * abs($val - $cache->pred) + (1 - $this->gamma) * $devPrev;
 
-        if($is_anomaly){
+        if($isAnomaly){
             $cache->anomalies++;
         }else{
             $cache->anomalies = 0;

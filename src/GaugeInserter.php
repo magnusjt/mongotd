@@ -15,8 +15,8 @@ class GaugeInserter{
     private $secondsInDay = 86400;
 
     public function __construct($conn, $interval = 300, LoggerInterface $logger = NULL){
-        $this->conn       = $conn;
-        $this->logger     = $logger;
+        $this->conn = $conn;
+        $this->logger = $logger;
         $this->interval = $interval;
     }
 

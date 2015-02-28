@@ -7,5 +7,5 @@ $mongotd = new \Mongotd\Mongotd($conn, null);
 
 $retriever = $mongotd->getRetriever();
 $start = microtime(true);
-$vals_by_date = $retriever->get(1, 1, new DateTime("2014-09-10 00:00:00"), new DateTime('2014-09-20 00:00:00'), \Mongotd\Resolution::DAY, \Mongotd\Aggregation::SUM);
+$valsByDate = $retriever->get(1, 1, new DateTime("2014-09-10 00:00:00"), new DateTime('2014-09-20 00:00:00'), \Mongotd\Resolution::DAY, \Mongotd\Aggregation::SUM);
 echo "Time taken: " . (microtime(true) - $start) . "\n";

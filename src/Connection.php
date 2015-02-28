@@ -9,21 +9,21 @@ class Connection{
 
     private $host = "localhost";
 
-    private $db_name = "mongotd";
+    private $dbName = "mongotd";
 
-    private $collection_prefix = "mongotd";
+    private $collectionPrefix = "mongotd";
 
-    public function __construct($host = 'localhost', $db_name = 'mongotd', $collection_prefix = 'mongotd'){
+    public function __construct($host = 'localhost', $dbName = 'mongotd', $collectionPrefix = 'mongotd'){
         $this->host              = $host;
-        $this->db_name           = $db_name;
-        $this->collection_prefix = $collection_prefix;
+        $this->dbName           = $dbName;
+        $this->collectionPrefix = $collectionPrefix;
 
         $this->client = new MongoClient("mongodb://{$this->host}");
-        $this->db = $this->client->selectDB($this->db_name);
+        $this->db = $this->client->selectDB($this->dbName);
     }
 
     public function dropDb(){
-        $this->client->dropDB($this->db_name);
+        $this->client->dropDB($this->dbName);
     }
 
     public function db(){
@@ -31,6 +31,6 @@ class Connection{
     }
 
     public function col($collection){
-        return $this->db()->selectCollection($this->collection_prefix . "_" . $collection);
+        return $this->db()->selectCollection($this->collectionPrefix . "_" . $collection);
     }
 }

@@ -5,32 +5,32 @@ class Aggregator{
     private $conn;
 
     /** @var  AggregatorDay */
-    private $aggregator_day;
+    private $aggregatorDay;
 
     /** @var  AggregatorHour */
-    private $aggregator_hour;
+    private $aggregatorHour;
 
     /** @var  AggregatorSubHour */
-    private $aggregator_sub_hour;
+    private $aggregatorSubHour;
 
-    public function __construct($conn, $aggregator_day, $aggregator_hour, $aggregator_sub_hour){
-        $this->conn                = $conn;
-        $this->aggregator_sub_hour = $aggregator_sub_hour;
-        $this->aggregator_hour     = $aggregator_hour;
-        $this->aggregator_day      = $aggregator_day;
+    public function __construct($conn, $aggregatorDay, $aggregatorHour, $aggregatorSubHour){
+        $this->conn              = $conn;
+        $this->aggregatorSubHour = $aggregatorSubHour;
+        $this->aggregatorHour    = $aggregatorHour;
+        $this->aggregatorDay     = $aggregatorDay;
     }
 
     /**
-     * @param $sid             int|string
-     * @param $nid             int|string
-     * @param $start           \DateTime
-     * @param $end             \DateTime
-     * @param $resolution      int
-     * @param $aggregation     int
-     * @param $target_timezone \DateTimeZone
+     * @param $sid            int|string
+     * @param $nid            int|string
+     * @param $start          \DateTime
+     * @param $end            \DateTime
+     * @param $resolution     int
+     * @param $aggregation    int
+     * @param $targetTimezone \DateTimeZone
      * @return array
      */
-    public function aggregate($sid, $nid, $start, $end, $resolution, $aggregation, $target_timezone){
+    public function aggregate($sid, $nid, $start, $end, $resolution, $aggregation, $targetTimezone){
         if($resolution < 0){
             throw new \InvalidArgumentException('Resolution must be a positive number');
         }
@@ -64,11 +64,11 @@ class Aggregator{
                                                array('mongodate' => 1, 'hours' => 1));
 
         if($resolution == Resolution::DAY){
-            return $this->aggregator_day->aggregate($cursor, $aggregation, $target_timezone);
+            return $this->aggregatorDay->aggregate($cursor, $aggregation, $targetTimezone);
         }else if($resolution == Resolution::HOUR){
-            return $this->aggregator_hour->aggregate($cursor, $aggregation, $target_timezone);
+            return $this->aggregatorHour->aggregate($cursor, $aggregation, $targetTimezone);
         }else if($resolution < Resolution::HOUR){
-            return $this->aggregator_sub_hour->aggregate($cursor, $resolution, $aggregation, $target_timezone);
+            return $this->aggregatorSubHour->aggregate($cursor, $resolution, $aggregation, $targetTimezone);
         }
 
         return array();

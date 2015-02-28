@@ -18,7 +18,7 @@ class DeltaConverter{
      * @param LoggerInterface $logger
      */
     public function __construct($conn, $interval, LoggerInterface $logger = NULL){
-        $this->conn   = $conn;
+        $this->conn = $conn;
         $this->logger = $logger;
         $this->interval = $interval;
     }
