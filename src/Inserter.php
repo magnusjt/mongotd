@@ -38,9 +38,7 @@ class Inserter{
             throw new \InvalidArgumentException('Value should be numeric');
         }
 
-        $datetime = clone $datetime;
-        $datetime->setTimezone(new \DateTimeZone('UTC'));
-        $cv = new CounterValue($sid, $nid, $datetime, $value);
+        $cv = new CounterValue($sid, $nid, clone $datetime, $value);
 
         if($isIncremental){
             $this->cvsIncremental[] = $cv;
@@ -56,8 +54,8 @@ class Inserter{
         }
 
         if(count($this->cvs) > 0){
-            $this->gaugeInserter->addBatch($this->cvs);
-            $this->anomalyDetector->detectBatch($this->cvs);
+            $this->gaugeInserter->insert($this->cvs);
+            $this->anomalyDetector->detect($this->cvs);
         }
 
         $this->cvs = array();
