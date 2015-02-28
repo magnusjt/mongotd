@@ -20,16 +20,19 @@ class StorageTest extends PHPUnit_Framework_TestCase{
         $someSid = 1;
         $someNid = 1;
         $someVal = 545;
-        $someDatetime = new \DateTime('2015-02-18 15:00:00');
+        $someDateStr = '2015-02-18 15:00:00';
+        $someDatetime = new \DateTime($someDateStr);
         $incrementalIsFalse = false;
+        $expectedValsByDate = array(
+            $someDateStr => $someVal
+        );
 
         $inserter->add($someSid, $someNid, $someDatetime, $someVal, $incrementalIsFalse);
         $inserter->insert();
 
         $valsByDate = $retriever->get($someSid, $someNid, $someDatetime, $someDatetime, $someResolution, $someAggregation);
 
-        $this->assertTrue(isset($valsByDate[$someDatetime->format('Y-m-d H:i:s')]), 'Inserted value wasn\'t found again at the same datetime');
-        $this->assertEquals($someVal, $valsByDate[$someDatetime->format('Y-m-d H:i:s')], 'Inserted value was not equal to retrieved value');
+        $this->assertTrue($valsByDate === $expectedValsByDate);
     }
 
     public function test_StoreTwoIncrementalValues_RetrievesDifference(){
@@ -43,8 +46,12 @@ class StorageTest extends PHPUnit_Framework_TestCase{
         $someValue2 = 700;
         $expectedDifference = $someValue2 - $someValue1;
         $firstDatetime = new \DateTime('2015-02-18 15:00:00');
-        $secondDatetime15MinAfterFirst = new \DateTime('2015-02-18 15:15:00');
+        $secondDateStr15MinAfterFirst = '2015-02-18 15:15:00';
+        $secondDatetime15MinAfterFirst = new \DateTime($secondDateStr15MinAfterFirst);
         $incrementalIsTrue = true;
+        $expectedValsByDate = array(
+            $secondDateStr15MinAfterFirst => $expectedDifference
+        );
 
         $inserter->add($someSid, $someNid, $firstDatetime, $someValue1, $incrementalIsTrue);
         $inserter->insert();
@@ -53,7 +60,6 @@ class StorageTest extends PHPUnit_Framework_TestCase{
 
         $valsByDate = $retriever->get($someSid, $someNid, $secondDatetime15MinAfterFirst, $secondDatetime15MinAfterFirst, $resolution15min, $someAggregation);
 
-        $this->assertTrue(isset($valsByDate[$secondDatetime15MinAfterFirst->format('Y-m-d H:i:s')]), 'Inserted value wasn\'t found again at the same datetime');
-        $this->assertEquals($expectedDifference, $valsByDate[$secondDatetime15MinAfterFirst->format('Y-m-d H:i:s')], 'Inserted value was not equal to retrieved value');
+        $this->assertTrue($valsByDate === $expectedValsByDate);
     }
 }
