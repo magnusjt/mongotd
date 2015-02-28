@@ -24,7 +24,7 @@ class AnomalyDetector{
     /**
      * @param $cvs CounterValue[]
      */
-    public function detectBatch($cvs){
+    public function detect($cvs){
         $col = $this->conn->col('acache');
         $batchUpdate  = new \MongoUpdateBatch($col);
         foreach($cvs as $cv){
