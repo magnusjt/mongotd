@@ -20,18 +20,19 @@ class Mongotd{
 
     /**
      * @param int $interval Number of seconds between each collected sample. Default 300 seconds = 5 minutes
-     * @return Inserter
+     * @param bool $doAnomalyDetection
+     * @return Inserter Interval is the expected number of seconds between each collected sample.
      *
      * Interval is the expected number of seconds between each collected sample.
      * Incremental values are scaled to represent the change in interval seconds.
      * Space in database is preallocated for values at the interval, and the time for a data point is rounded
      * down to the nearest interval point.
      */
-    public function getInserter($interval = Resolution::FIVE_MINUTES){
+    public function getInserter($interval = Resolution::FIVE_MINUTES, $doAnomalyDetection = false){
         $gaugeInserter = new GaugeInserter($this->conn, $interval, $this->logger);
         $deltaConverter = new DeltaConverter($this->conn, $interval, $this->logger);
         $anomalyDetector = new AnomalyDetector($this->conn);
-        return new Inserter($gaugeInserter, $deltaConverter, $anomalyDetector);
+        return new Inserter($gaugeInserter, $deltaConverter, $anomalyDetector, $doAnomalyDetection);
     }
 
     /**

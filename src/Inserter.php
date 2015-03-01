@@ -11,16 +11,20 @@ class Inserter{
     /** @var  AnomalyDetector */
     private $anomalyDetector;
 
+    /** @var bool  */
+    private $doAnomalyDetection;
+
     /** @var CounterValue[] */
     private $cvs = array();
 
     /** @var CounterValue[] */
     private $cvsIncremental = array();
 
-    public function __construct($gaugeInserter, $deltaConverter, $anomalyDetector){
+    public function __construct($gaugeInserter, $deltaConverter, $anomalyDetector, $doAnomalyDetection = false){
         $this->gaugeInserter   = $gaugeInserter;
         $this->deltaConverter  = $deltaConverter;
         $this->anomalyDetector = $anomalyDetector;
+        $this->doAnomalyDetection = $doAnomalyDetection;
 
         $this->cvs = array();
         $this->cvsIncremental = array();
@@ -55,7 +59,9 @@ class Inserter{
 
         if(count($this->cvs) > 0){
             $this->gaugeInserter->insert($this->cvs);
-            $this->anomalyDetector->detect($this->cvs);
+            if($this->doAnomalyDetection){
+                $this->anomalyDetector->detect($this->cvs);
+            }
         }
 
         $this->cvs = array();
