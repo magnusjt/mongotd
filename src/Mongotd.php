@@ -49,13 +49,9 @@ class Mongotd{
         $this->conn->col('cv_prev')->ensureIndex(array('sid' => 1, 'nid' => 1), array('unique' => true));
         $this->conn->col('cv')->ensureIndex(array('mongodate' => 1, 'sid' => 1, 'nid' => 1), array('unique' => true));
         $this->conn->col('acache')->ensureIndex(array('sid' => 1, 'nid' => 1), array('unique' => true));
-    }
 
-    public function pruneOldData(){
-        $this->conn->col('cv_prev')->remove(array(
-            'mongodate' => array(
-                '$lt' => new \MongoDate((new \DateTime('-1 day'))->getTimestamp())
-            )
-        ));
+        # Expire data after some time
+        $this->conn->col('cv_prev')->ensureIndex(array("mongodate" => 1), array('expireAfterSeconds' => 60*60*24*1));
+        $this->conn->col('cv')->ensureIndex(array("mongodate" => 1), array('expireAfterSeconds' => 60*60*24*120));
     }
 }
