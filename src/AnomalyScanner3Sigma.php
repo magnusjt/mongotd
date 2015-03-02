@@ -80,15 +80,17 @@ class AnomalyScanner3Sigma{
             'sid' => $sid
         ), $projection);
 
-        if($cursor->count() == 0){
-            return 0;
-        }
-
         $prevVals = array();
         foreach($cursor as $doc){
             foreach($doc['vals'] as $second => $value){
-                $prevVals[] = $value;
+                if($value !== null){
+                    $prevVals[] = $value;
+                }
             }
+        }
+
+        if(count($prevVals) == 0){
+            return 0;
         }
 
         // Find values for today, around the smoothing interval
@@ -98,15 +100,17 @@ class AnomalyScanner3Sigma{
              'sid' => $sid
         ), $projection);
 
-        if($cursor->count() == 0){
-            return 0;
-        }
-
         $currVals = array();
         foreach($cursor as $doc){
             foreach($doc['vals'] as $second => $value){
-                $currVals[] = $value;
+                if($value !== null){
+                    $currVals[] = $value;
+                }
             }
+        }
+
+        if(count($currVals) == 0){
+            return 0;
         }
 
         return $this->calculateScore($prevVals, $currVals);

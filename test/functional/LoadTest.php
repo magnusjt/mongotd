@@ -10,7 +10,8 @@ $conn->dropDb();
 $mongotd->ensureIndexes();
 $inserter = $mongotd->getInserter($config['insertIntervalInSeconds']);
 $retriever = $mongotd->getRetriever();
-$anomalyScanner = new \Mongotd\AnomalyScanner3Sigma($conn);
+//$anomalyScanner = new \Mongotd\AnomalyScanner3Sigma($conn);
+$anomalyScanner = new \Mongotd\AnomalyScannerKs($conn);
 $currIteration = 1;
 $totalInserts = 0;
 
@@ -68,7 +69,7 @@ while($currIteration <= $config['nIterations']){
 
         echo 'Time taken:      ' . $retrievalTime             . "\n";
         echo 'Retrievals done: ' . $retrievals                . "\n";
-        echo 'Retrievals/src:  ' . $retrievals/$retrievalTime . "\n";
+        echo 'Retrievals/sec:  ' . $retrievals/$retrievalTime . "\n";
     }
 
     echo 'Calculating anomalies...' . "\n";
