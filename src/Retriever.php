@@ -59,7 +59,7 @@ class Retriever{
             $interval = '1 day';
             $clampFunction = '\Mongotd\DateTimeHelper::clampToDay';
         }else{
-            throw new \Exception('blarg!');
+            throw new \Exception('Invalid resolution given');
         }
 
         $end->add(\DateInterval::createFromDateString($interval));
