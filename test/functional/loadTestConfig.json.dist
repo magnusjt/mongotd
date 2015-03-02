@@ -1,0 +1,16 @@
+{
+    "timezone":                "Europe/Oslo",
+    "dbhost":                  "localhost",
+    "dbname":                  "test",
+    "dbprefix":                "test",
+    "insertIntervalInSeconds": "300",
+    "starttime":               "-60 days",
+    "daysPerIteration":        "1 days",
+    "valuesAreIncremental":    false,
+    "nNids":                   10,
+    "nSids":                   100,
+    "doRetrievalTest":         true,
+    "retrieveAggregation":     1,
+    "retrieveResolution":      300,
+    "nIterations":             60
+}
