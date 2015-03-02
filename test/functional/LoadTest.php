@@ -10,8 +10,16 @@ $conn->dropDb();
 $mongotd->ensureIndexes();
 $inserter = $mongotd->getInserter($config['insertIntervalInSeconds']);
 $retriever = $mongotd->getRetriever();
+$anomalyScanner = new \Mongotd\AnomalyScanner3Sigma($conn);
 $currIteration = 1;
 $totalInserts = 0;
+
+$nidsidPairs = array();
+for($nid = 1; $nid <= $config['nNids']; $nid++){
+    for($sid = 1; $sid <= $config['nSids']; $sid++){
+        $nidsidPairs[] = array('nid' => $nid, 'sid' => $sid);
+    }
+}
 
 while($currIteration <= $config['nIterations']){
     echo "Starting iteration $currIteration...\n";
@@ -62,6 +70,13 @@ while($currIteration <= $config['nIterations']){
         echo 'Retrievals done: ' . $retrievals                . "\n";
         echo 'Retrievals/src:  ' . $retrievals/$retrievalTime . "\n";
     }
+
+    echo 'Calculating anomalies...' . "\n";
+    $timerStart = microtime(true);
+    $anomalies = $anomalyScanner->scan($nidsidPairs, $end, 20, 15*60);
+    $anomalyCalcTime = (microtime(true) - $timerStart);
+    echo 'Time to calculate anomalies: ' . $anomalyCalcTime  . "\n";
+    echo 'Number of anomalies found:   ' . count($anomalies) . "\n";
 
     $start->add(DateInterval::createFromDateString($config['daysPerIteration']));
     $currIteration++;
