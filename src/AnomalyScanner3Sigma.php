@@ -34,6 +34,12 @@ class AnomalyScanner3Sigma extends AnomalyScanner{
             $windowEndPosition = $cv->datetime->getTimestamp()%86400;
 
             $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $controlStartDate, $controlEndDate, $this->windowLengthInSeconds, $windowEndPosition);
+
+            // Prevent anomaly detection when there is little to no data
+            if(count($prevDataPoints) < $this->daysToScan){
+                continue;
+            }
+
             $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, $cv->datetime, $this->windowLengthInSeconds, $windowEndPosition);
             $predicted = $this->checkForAnomaly($prevDataPoints, $currDataPoints);
             if($predicted !== false){
