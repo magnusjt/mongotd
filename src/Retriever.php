@@ -127,25 +127,47 @@ class Retriever{
     }
 
     /**
-     * @param $threshold int Number of anomalies in a row required for it to be considered abnormal
+     * @param $datetimeFrom \DateTime
+     * @param $datetimeTo   \DateTime
+     * @param $minCount     int
+     * @param $maxResults   int|bool
      *
      * @return array
      */
-    public function getCurrentAbnormal($threshold = 3){
-        $col = $this->conn->col('acache');
+    public function getAnomalies($datetimeFrom, $datetimeTo, $minCount = 1, $maxResults = false){
+        $cursor = $this->conn->col('anomalies')->find(array(
+            'mongodate' => array('$gte' => new \MongoDate($datetimeFrom->getTimestamp()), '$lte' => new \MongoDate($datetimeTo->getTimestamp()))
+        ));
 
-        $cursor = $col->find(array('anomalies' => array('$gte' => $threshold)), array(
-            'sid'  => 1,
-            'nid'  => 1,
-            'pred' => 1,
-            'val'  => 1
-        ))->sort(array('anomalies' => -1));
-
-        $docs = array();
+        $anomalies = array();
         foreach($cursor as $doc){
-            $docs[] = $doc;
+            $nid = $doc['nid'];
+            $sid = $doc['sid'];
+            $key = $nid . '_' . $sid;
+
+            if(!isset($anomalies[$key])){
+                $anomalies[$key] = array('nid' => $nid, 'sid' => $sid, 'count' => 0);
+            }
+
+            $anomalies[$key]['count']++;
         }
 
-        return $docs;
+        $anomaliesWithMinCount = array();
+        foreach($anomalies as $anomaly){
+            if($anomaly['count'] >= $minCount){
+                $anomaliesWithMinCount[] = $anomaly;
+            }
+        }
+
+        // Sort from largest to smallest counts
+        usort($anomaliesWithMinCount, function($a, $b){
+            if($a['count'] > $b['count']){
+                return -1;
+            }
+
+            return 1;
+        });
+
+        return array_slice($anomaliesWithMinCount, 0, $maxResults);
     }
 }

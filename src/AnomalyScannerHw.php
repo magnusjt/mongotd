@@ -1,9 +1,20 @@
 <?php namespace Mongotd;
 
-class AnomalyDetector{
-    /** @var  Connection */
-    private $conn;
+class HwCache{
+    public $sid       = NULL;
+    public $nid       = NULL;
+    public $level     = 0;
+    public $trend     = 0;
+    public $pred      = NULL;
+    public $val       = NULL;
+    public $s         = 0;
+    public $dev       = 0;
+}
 
+/*
+ * Scans for anomalies using holt-winters algorithm
+ */
+class AnomalyScannerHw extends AnomalyScanner{
     /** @var float Holt winters parameter */
     private $alpha = 0.05;
     /** @var float Holt winters parameter */
@@ -17,18 +28,15 @@ class AnomalyDetector{
     /** @var int How many minutes one season lasts */
     private $seasonLength = 1440;
 
-    public function __construct($conn){
-        $this->conn = $conn;
-    }
-
     /**
-     * @param $cvs CounterValue[]
+     * @param $cvs      CounterValue[]
+     * @param $datetime \DateTime
      */
-    public function detect($cvs){
-        $col = $this->conn->col('acache');
+    public function scan($cvs, \DateTime $datetime){
+        $col = $this->conn->col('hwcache');
         $batchUpdate  = new \MongoUpdateBatch($col);
         foreach($cvs as $cv){
-            $cache = new AnomalyCache();
+            $cache = new HwCache();
             $cache->sid = $cv->sid;
             $cache->nid = $cv->nid;
 
@@ -40,7 +48,6 @@ class AnomalyDetector{
                 $cache->trend = $doc['trend'];
                 $cache->pred = $doc['pred'];
                 $cache->val = $doc['val'];
-                $cache->anomalies = $doc['anomalies'];
                 if(isset($doc['season'][$seasonIndex])){
                     $cache->s = $doc['season'][$seasonIndex]['s'];
                     $cache->dev = $doc['season'][$seasonIndex]['dev'];
@@ -53,22 +60,22 @@ class AnomalyDetector{
                                  'trend'     => $cache->trend,
                                  'pred'      => $cache->pred,
                                  'val'       => $cache->val,
-                                 'anomalies' => $cache->anomalies,
                                  'season'    => array($seasonIndex => array('s' => $cache->s, 'dev' => $cache->dev))
                              )
                 );
             }
 
-            $this->updateAnomalyCache($cache, $cv->value);
+            if($this->updateHwCache($cache, $cv->value)){
+                $this->storeAnomaly($cv->nid, $cv->sid, $cv->datetime, $cache->pred, $cv->value);
+            }
 
             $batchUpdate->add(array(
                 'q' => array('sid' => $cv->sid, 'nid' => $cv->nid),
                 'u' => array('$set' => array(
-                    'level'                            => $cache->level,
-                    'trend'                            => $cache->trend,
-                    'pred'                             => $cache->pred,
-                    'val'                              => $cache->val,
-                    'anomalies'                        => $cache->anomalies,
+                    'level'                           => $cache->level,
+                    'trend'                           => $cache->trend,
+                    'pred'                            => $cache->pred,
+                    'val'                             => $cache->val,
                     'season.' . $seasonIndex . '.s'   => $cache->s,
                     'season.' . $seasonIndex . '.dev' => $cache->dev,
                 ))
@@ -89,10 +96,12 @@ class AnomalyDetector{
     }
 
     /**
-     * @param $cache AnomalyCache
+     * @param $cache HwCache
      * @param $val   number
+     *
+     * @return bool
      */
-    private function updateAnomalyCache($cache, $val){
+    private function updateHwCache($cache, $val){
         $levelPrev    = $cache->level;
         $trendPrev    = $cache->trend;
         $seasonalPrev = $cache->s;
@@ -104,20 +113,16 @@ class AnomalyDetector{
         $upper = $cache->pred + $this->scale * $devPrev;
         $lower = $cache->pred - $this->scale * $devPrev;
 
-        $isAnomaly = false;
-        if($val < $lower or $val > $upper){
-            $isAnomaly = true;
-        }
-
         $cache->level = $this->alpha * ($val - $seasonalPrev) + (1 - $this->alpha) * ($levelPrev + $trendPrev);
         $cache->trend = $this->beta * ($cache->level - $levelPrev) + (1 - $this->beta) * $trendPrev;
         $cache->s     = $this->gamma * ($val - $levelPrev - $trendPrev) + (1 - $this->gamma) * $seasonalPrev;
         $cache->dev   = $this->gamma * abs($val - $cache->pred) + (1 - $this->gamma) * $devPrev;
 
-        if($isAnomaly){
-            $cache->anomalies++;
-        }else{
-            $cache->anomalies = 0;
+        // Return true in case the value is an anomaly
+        if($val < $lower or $val > $upper){
+            return true;
         }
+
+        return false;
     }
 }

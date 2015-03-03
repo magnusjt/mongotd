@@ -10,127 +10,71 @@ namespace Mongotd;
  * There is a smoothing interval that can be set so that instead of looking at
  * a given point in time, we look at the average during the interval.
  */
-class AnomalyScanner3Sigma{
-    /** @var  Connection */
-    private $conn;
+class AnomalyScanner3Sigma extends AnomalyScanner{
+    /** @var int  */
+    private $daysToScan = 20;
+
+    /** @var int  */
+    private $windowLengthInSeconds = 300;
+
+    /** @var int How many std's of deviation we accept (default to 3, as in 3-sigma) */
+    private $scoreTreshold = 3;
 
     /**
-     * @param $conn Connection
-     */
-    public function __construct($conn){
-        $this->conn = $conn;
-    }
-
-    /**
-     * @param $nidsidPairs           array         Ex: [['nid' => $nid, 'sid' => $sid]]
-     * @param $datetimeToCheck       \DateTime
-     * @param $daysToScan            int
-     * @param $smoothIntervalInSecs  int           Average values at dateTimeToCheck and this amount of seconds in the past
+     * @param $cvs      CounterValue[]
+     * @param $datetime \DateTime
      *
      * @return array
      */
-    public function scan($nidsidPairs, $datetimeToCheck, $daysToScan = 20, $smoothIntervalInSecs = 300){
-        $datetimeToCheck = clone $datetimeToCheck;
+    public function scan($cvs, \DateTime $datetime){
+        $datetimeToCheck = clone $datetime;
         $datetimeToCheck->setTimeZone(new \DateTimeZone('UTC'));
+        $windowEndPosition = $datetimeToCheck->getTimestamp()%86400;
 
-        $secondOfInterest = $datetimeToCheck->getTimestamp()%86400;
-        $startdate = clone $datetimeToCheck;
-        $enddate = clone $datetimeToCheck;
-        $startdate->sub(\DateInterval::createFromDateString($daysToScan . ' days'));
-        $startdate->setTime(0, 0, 0);
-        $enddate->setTime(0, 0, 0);
-        $mongodateStart = new \MongoDate($startdate->getTimestamp());
-        $mongodateEnd = new \MongoDate($enddate->getTimestamp());
+        $datetimeToCheck->setTime(0, 0, 0);
+        $controlStartDate = clone $datetimeToCheck;
+        $controlEndDate = clone $datetimeToCheck;
+        $controlStartDate->sub(\DateInterval::createFromDateString($this->daysToScan . ' days'));
+        $controlEndDate->sub(\DateInterval::createFromDateString('1 day'));
 
-        $nidsidPairsWithAnomaly = array();
-        foreach($nidsidPairs as $nidsidPair){
-            $score = $this->getScore($nidsidPair['nid'], $nidsidPair['sid'], $mongodateStart, $mongodateEnd, $secondOfInterest, $smoothIntervalInSecs);
-            if($score > 3){
-                $nidsidPairsWithAnomaly[] = $nidsidPair;
+        $controlMongodateStart = new \MongoDate($controlStartDate->getTimestamp());
+        $controlMongodateEnd = new \MongoDate($controlEndDate->getTimestamp());
+        $mongodateToCheck = new \MongoDate($datetimeToCheck->getTimestamp());
+
+        foreach($cvs as $cv){
+            $prevDataPoints = $this->getValsWithinWindow($cv->nid, $cv->sid, $controlMongodateStart, $controlMongodateEnd, $this->windowLengthInSeconds, $windowEndPosition);
+            $currDataPoints = $this->getValsWithinWindow($cv->nid, $cv->sid, $mongodateToCheck, $mongodateToCheck, $this->windowLengthInSeconds, $windowEndPosition);
+            $predicted = $this->checkForAnomaly($prevDataPoints, $currDataPoints);
+            if($predicted !== false){
+                $this->storeAnomaly($cv->nid, $cv->sid, $datetime, $predicted, $cv->value);
             }
         }
-
-        return $nidsidPairsWithAnomaly;
     }
 
     /**
-     * @param $nid                  int
-     * @param $sid                  int
-     * @param $mongodateStart       \MongoDate
-     * @param $mongodateEnd         \MongoDate
-     * @param $secondOfInterest     int
-     * @param $smoothIntervalInSecs int
+     * @param $prevDataPoints number[]
+     * @param $currDataPoints number[]
      *
-     * @return float
+     * @return bool|number
      */
-    private function getScore($nid, $sid, $mongodateStart, $mongodateEnd, $secondOfInterest, $smoothIntervalInSecs){
-        // The projection gives the seconds during the day which we want values for
-        $projection = array();
-        for($i = 0; $i < $smoothIntervalInSecs; $i++){
-            if($secondOfInterest - $i < 0){
-                $secondOfInterest = 86400 + $i;
-            }
-            $projection[] = 'vals.' . ($secondOfInterest - $i);
+    private function checkForAnomaly(array $prevDataPoints, array $currDataPoints){
+        if(count($prevDataPoints) == 0 or count($currDataPoints) == 0){
+            return false;
         }
 
-        // Find values for the previous days, around the smoothing interval
-        $cursor = $this->conn->col('cv')->find(array(
-            'mongodate' => array('$gte' => $mongodateStart, '$lt' => $mongodateEnd),
-            'nid' => $nid,
-            'sid' => $sid
-        ), $projection);
-
-        $prevVals = array();
-        foreach($cursor as $doc){
-            foreach($doc['vals'] as $second => $value){
-                if($value !== null){
-                    $prevVals[] = $value;
-                }
-            }
-        }
-
-        if(count($prevVals) == 0){
-            return 0;
-        }
-
-        // Find values for today, around the smoothing interval
-        $cursor = $this->conn->col('cv')->find(array(
-             'mongodate' => $mongodateEnd,
-             'nid' => $nid,
-             'sid' => $sid
-        ), $projection);
-
-        $currVals = array();
-        foreach($cursor as $doc){
-            foreach($doc['vals'] as $second => $value){
-                if($value !== null){
-                    $currVals[] = $value;
-                }
-            }
-        }
-
-        if(count($currVals) == 0){
-            return 0;
-        }
-
-        return $this->calculateScore($prevVals, $currVals);
-    }
-
-    /**
-     * @param $prevVals    number[]
-     * @param $currentVals number[]
-     *
-     * @return float
-     */
-    private function calculateScore(array $prevVals, array $currentVals){
-        $prevStats = $this->calcAvgAndStd($prevVals);
-        $currStats = $this->calcAvgAndStd($currentVals);
+        $prevStats = $this->calcAvgAndStd($prevDataPoints);
+        $currStats = $this->calcAvgAndStd($currDataPoints);
 
         if($prevStats['std'] == 0){
-            return 0;
+            return false;
         }
 
-        return abs($currStats['avg'] - $prevStats['avg'])/$prevStats['std'];
+        $score = abs($currStats['avg'] - $prevStats['avg'])/$prevStats['std'];
+        if($score > $this->scoreTreshold){
+            return $prevStats['avg'];
+        }
+
+        return false;
     }
 
     /**

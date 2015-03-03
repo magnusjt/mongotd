@@ -1,15 +1,14 @@
 <?php namespace Mongotd;
 
 class Inserter{
-
     /** @var  GaugeInserter */
     private $gaugeInserter;
 
     /** @var  DeltaConverter */
     private $deltaConverter;
 
-    /** @var  AnomalyDetector */
-    private $anomalyDetector;
+    /** @var  AnomalyScanner */
+    private $anomalyScanner;
 
     /** @var bool  */
     private $doAnomalyDetection;
@@ -20,10 +19,16 @@ class Inserter{
     /** @var CounterValue[] */
     private $cvsIncremental = array();
 
-    public function __construct($gaugeInserter, $deltaConverter, $anomalyDetector, $doAnomalyDetection = false){
+    /**
+     * @param $gaugeInserter      GaugeInserter
+     * @param $deltaConverter     DeltaConverter
+     * @param $doAnomalyDetection bool
+     * @param $anomalyScanner     AnomalyScanner
+     */
+    public function __construct($gaugeInserter, $deltaConverter, $doAnomalyDetection = false, $anomalyScanner = null){
         $this->gaugeInserter   = $gaugeInserter;
         $this->deltaConverter  = $deltaConverter;
-        $this->anomalyDetector = $anomalyDetector;
+        $this->anomalyScanner  = $anomalyScanner;
         $this->doAnomalyDetection = $doAnomalyDetection;
 
         $this->cvs = array();
@@ -60,7 +65,7 @@ class Inserter{
         if(count($this->cvs) > 0){
             $this->gaugeInserter->insert($this->cvs);
             if($this->doAnomalyDetection){
-                $this->anomalyDetector->detect($this->cvs);
+                $this->anomalyScanner->scan($this->cvs, new \DateTime('now'));
             }
         }
 
