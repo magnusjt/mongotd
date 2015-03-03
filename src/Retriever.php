@@ -168,6 +168,10 @@ class Retriever{
             return 1;
         });
 
-        return array_slice($anomaliesWithMinCount, 0, $maxResults);
+        if($maxResults !== false){
+            return array_slice($anomaliesWithMinCount, 0, $maxResults);
+        }else{
+            return $anomaliesWithMinCount;
+        }
     }
 }
