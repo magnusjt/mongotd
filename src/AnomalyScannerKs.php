@@ -20,34 +20,25 @@ class AnomalyScannerKs extends AnomalyScanner{
     private $pTreshold = 0.01;
 
     /**
-     * @param $cvs      CounterValue[]
-     * @param $datetime \DateTime
+     * @param $cvs CounterValue[]
      *
      * @return array
      */
-    public function scan($cvs, \DateTime $datetime){
-        $datetimeToCheck = clone $datetime;
-        $datetimeToCheck->setTimeZone(new \DateTimeZone('UTC'));
-        $windowEndPosition = $datetimeToCheck->getTimestamp()%86400;
-
-        $datetimeToCheck->setTime(0, 0, 0);
-        $controlStartDate = clone $datetimeToCheck;
-        $controlEndDate = clone $datetimeToCheck;
-        $controlStartDate->sub(\DateInterval::createFromDateString($this->daysToScan . ' days'));
-        $controlEndDate->sub(\DateInterval::createFromDateString('1 day'));
-
-        $controlMongodateStart = new \MongoDate($controlStartDate->getTimestamp());
-        $controlMongodateEnd = new \MongoDate($controlEndDate->getTimestamp());
-        $mongodateToCheck = new \MongoDate($datetimeToCheck->getTimestamp());
-
+    public function scan($cvs){
         foreach($cvs as $cv){
-            $prevDataPoints = $this->getValsWithinWindow($cv->nid, $cv->sid, $controlMongodateStart, $controlMongodateEnd, $this->windowLengthInSeconds, $windowEndPosition);
-            $currDataPoints = $this->getValsWithinWindow($cv->nid, $cv->sid, $mongodateToCheck, $mongodateToCheck, $this->windowLengthInSeconds, $windowEndPosition);
+            $controlEndDate = clone $cv->datetime;
+            $controlEndDate->sub(\DateInterval::createFromDateString('1 day'));
+            $controlStartDate = clone $controlEndDate;
+            $controlStartDate->sub(\DateInterval::createFromDateString($this->daysToScan . ' days'));
+            $windowEndPosition = $cv->datetime->getTimestamp()%86400;
+
+            $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $controlStartDate, $controlEndDate, $this->windowLengthInSeconds, $windowEndPosition);
+            $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, $cv->datetime, $this->windowLengthInSeconds, $windowEndPosition);
             $ks = $this->calculateKsTwoSided($prevDataPoints, $currDataPoints);
 
             if($ks !== false and $ks['p'] < $this->pTreshold and $ks['d'] > $this->dTreshold){
                 $predicted = array_sum($prevDataPoints)/count($prevDataPoints);
-                $this->storeAnomaly($cv->nid, $cv->sid, $datetime, $predicted, $cv->value);
+                $this->storeAnomaly($cv->nid, $cv->sid, $cv->datetime, $predicted, $cv->value);
             }
         }
     }
@@ -85,7 +76,7 @@ class AnomalyScannerKs extends AnomalyScanner{
     /*
      * Find the index in array a where elements of v can be inserted
      * so that the sort order of a is preserved. Start looking from
-     * the right side of a.
+     * the right side of a. Could do bin search here, but not much improvement to be had I think.
      */
     private function searchSorted($arrInsertInto, $arrToBeInserted){
         $res = array();

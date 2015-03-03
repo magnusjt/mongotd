@@ -29,10 +29,9 @@ class AnomalyScannerHw extends AnomalyScanner{
     private $seasonLength = 1440;
 
     /**
-     * @param $cvs      CounterValue[]
-     * @param $datetime \DateTime
+     * @param $cvs CounterValue[]
      */
-    public function scan($cvs, \DateTime $datetime){
+    public function scan($cvs){
         $col = $this->conn->col('hwcache');
         $batchUpdate  = new \MongoUpdateBatch($col);
         foreach($cvs as $cv){

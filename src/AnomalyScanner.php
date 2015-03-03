@@ -14,11 +14,10 @@ abstract class AnomalyScanner{
 
     /**
      * @param $cvs CounterValue[]
-     * @param $datetime \DateTime
      *
      * @return
      */
-    abstract public function scan($cvs, \DateTime $datetime);
+    abstract public function scan($cvs);
 
     /**
      * @param $nid       int
@@ -40,26 +39,41 @@ abstract class AnomalyScanner{
     /**
      * @param $nid                   int
      * @param $sid                   int
-     * @param $mongodateStart        \MongoDate
-     * @param $mongodateEnd          \MongoDate
+     * @param $datetimeStart         \DateTime
+     * @param $datetimeEnd           \DateTime
      * @param $windowLengthInSeconds int
      * @param $windowEndPosition     int
      *
      * @return number[]
      */
-    protected function getValsWithinWindow($nid, $sid, \MongoDate $mongodateStart, \MongoDate $mongodateEnd, $windowLengthInSeconds, $windowEndPosition){
-        $projection = $this->getProjection($windowLengthInSeconds, $windowEndPosition);
+    protected function getValsWithinWindows($nid, $sid, $datetimeStart, $datetimeEnd, $windowLengthInSeconds, $windowEndPosition){
+        $tsStart = $datetimeStart->getTimestamp();
+        $tsEnd = $datetimeEnd->getTimestamp();
+        $mongodateStart = new \MongoDate($tsStart-$tsStart%86400);
+        $mongodateEnd = new \MongoDate($tsEnd-$tsEnd%86400);
 
         $cursor = $this->conn->col('cv')->find(array(
            'mongodate' => array('$gte' => $mongodateStart, '$lte' => $mongodateEnd),
            'nid' => $nid,
-           'sid' => $sid
-        ), $projection);
+           'sid' => $sid,
+           'vals' => array('$ne' => null)
+        ), array('vals' => 1));
+
+        $offset = 0;
+        $windowStartPosition = $windowEndPosition - $windowLengthInSeconds;
+
+        // Move window into positive range if needed
+        if($windowStartPosition < 0){
+            $offset = -1*$windowStartPosition;
+            $windowEndPosition += $offset;
+            $windowStartPosition = 0;
+        }
 
         $vals = array();
         foreach($cursor as $doc){
             foreach($doc['vals'] as $second => $val){
-                if($val !== null){
+                $secondOffset = ($second+$offset)%86400;
+                if($val !== null and $secondOffset <= $windowEndPosition and $secondOffset >= $windowStartPosition){
                     $vals[] = $val;
                 }
             }
@@ -80,7 +94,7 @@ abstract class AnomalyScanner{
             if($windowEndPosition - $i < 0){
                 $windowEndPosition = 86400 + $i;
             }
-            $projection[] = 'vals.' . ($windowEndPosition - $i);
+            $projection['vals.' . ($windowEndPosition - $i)] = 1;
         }
 
         return $projection;

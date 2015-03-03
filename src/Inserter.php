@@ -65,7 +65,7 @@ class Inserter{
         if(count($this->cvs) > 0){
             $this->gaugeInserter->insert($this->cvs);
             if($this->doAnomalyDetection){
-                $this->anomalyScanner->scan($this->cvs, new \DateTime('now'));
+                $this->anomalyScanner->scan($this->cvs);
             }
         }
 
