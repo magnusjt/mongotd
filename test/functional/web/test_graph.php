@@ -7,13 +7,13 @@ use \Mongotd\Mongotd;
 use \Mongotd\Resolution;
 use \Mongotd\Aggregation;
 
-$conn = new Connection('localhost', 'mongotdtest', 'mongotdtest');
+$conn = new Connection('localhost', 'test', 'test');
 $mongotd = new Mongotd($conn, null);
 $retriever = $mongotd->getRetriever();
 
 $sids = array(1,2);
-$start = "2014-09-10 00:00:00";
-$end = "2014-09-20 00:00:00";
+$start = "-20 days";
+$end = "now";
 $aggregation = Aggregation::SUM;
 $resolution = Resolution::HOUR;
 
