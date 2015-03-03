@@ -33,16 +33,34 @@ class AnomalyScannerKs extends AnomalyScanner{
             $windowEndPosition = $cv->datetime->getTimestamp()%86400;
 
             $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $controlStartDate, $controlEndDate, $this->windowLengthInSeconds, $windowEndPosition);
+
+            // Prevent anomaly detection when there is little to no data
+            if(count($prevDataPoints) < $this->daysToScan){
+                continue;
+            }
+
             $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, $cv->datetime, $this->windowLengthInSeconds, $windowEndPosition);
             $ks = $this->calculateKsTwoSided($prevDataPoints, $currDataPoints);
 
             if($ks !== false and $ks['p'] < $this->pTreshold and $ks['d'] > $this->dTreshold){
-                $predicted = array_sum($prevDataPoints)/count($prevDataPoints);
+                $predicted = array_sum($prevDataPoints)/count($prevDataPoints); // Not really a good prediction, but KS doesn't deal in predictions
                 $this->storeAnomaly($cv->nid, $cv->sid, $cv->datetime, $predicted, $cv->value);
             }
         }
     }
 
+    /* The algorithm for this function:
+     *
+     * - Calculate CDFs for both data series. Do this by creating a set of values concatenated between them
+     *   as F-values (CDF(F) = number of values less than F. Sort the arrays, and see where the values from the concatenated
+     *   array has to be inserted to keep the order of the array we pretend to insert into.
+     *
+     * - Take the largest absolute difference between the CDFs, the distance.
+     * - Get the p-Value by using the kolmogorov distribution. The p value is the level
+     *   at which we cannot reject the hypothesis that the two sample-sets are drawn from different distributions.
+     *   I.e: A low p values tells us that there is a bigger chance that the samples where drawn from different distributions.
+     *
+     */
     public function calculateKsTwoSided(array $data1, array $data2){
         $n1 = count($data1);
         $n2 = count($data2);
@@ -54,6 +72,12 @@ class AnomalyScannerKs extends AnomalyScanner{
         sort($data1);
         sort($data2);
 
+        /*
+         * Concatenate the arrays to get a common list of values to measure against.
+         * Remember, CDF is defined as 1/n * sum(number of values less than F), for any F.
+         * The concatenated array here gives us common 'F's to work with, so the cdfs
+         * are easy to compare.
+         */
         $data_all = array_merge($data1, $data2);
 
         $cdf1 = array_map(function($elem) use ($n1) {
@@ -84,7 +108,7 @@ class AnomalyScannerKs extends AnomalyScanner{
         for($i = 0; $i < count($arrToBeInserted); $i++){
             $pos = 0;
             for($j = count($arrInsertInto)-1; $j > 0; $j--){
-                if($arrToBeInserted[$i] <= $arrInsertInto[$j]){
+                if($arrToBeInserted[$i] >= $arrInsertInto[$j]){
                     $pos = $j;
                     break;
                 }
