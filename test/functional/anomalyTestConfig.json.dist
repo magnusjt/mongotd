@@ -1,0 +1,9 @@
+{
+  "dbhost":                  "localhost",
+  "dbname":                  "test",
+  "dbprefix":                "test",
+  "insertIntervalInSeconds": 300,
+  "nDays":                   30,
+  "anomalyDetectionMethod":  "sigma",
+  "noiseRate":               0.1
+}
