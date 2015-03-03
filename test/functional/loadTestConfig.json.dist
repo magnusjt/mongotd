@@ -3,7 +3,7 @@
     "dbhost":                  "localhost",
     "dbname":                  "test",
     "dbprefix":                "test",
-    "insertIntervalInSeconds": "300",
+    "insertIntervalInSeconds": 300,
     "starttime":               "-60 days",
     "daysPerIteration":        "1 days",
     "valuesAreIncremental":    false,
