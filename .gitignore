@@ -6,3 +6,4 @@ phpunit.xml
 Vagrantfile
 vagrant_bootstrap.sh
 test/functional/loadTestConfig.json
+test/functional/anomalyTestConfig.json
