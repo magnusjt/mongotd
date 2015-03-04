@@ -146,7 +146,7 @@ class Retriever{
             $key = $nid . '_' . $sid;
 
             if(!isset($anomalies[$key])){
-                $anomalies[$key] = array('nid' => $nid, 'sid' => $sid, 'count' => 0);
+                $anomalies[$key] = array('nid' => $nid, 'sid' => $sid, 'count' => 0, 'avg' => $doc['predicted']);
             }
 
             $anomalies[$key]['count']++;
@@ -157,6 +157,10 @@ class Retriever{
             if($anomaly['count'] >= $minCount){
                 $anomaliesWithMinCount[] = $anomaly;
             }
+        }
+
+        foreach($anomaliesWithMinCount as $anomaly){
+            $anomaly['avg'] /= $anomaly['count'];
         }
 
         // Sort from largest to smallest counts
