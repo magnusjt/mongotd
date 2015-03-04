@@ -10,11 +10,10 @@ class SignalGenerator{
 
         $series = array();
         $amplitude = 100;
-        $noiseAmplitude = $amplitude*$noiseRate;
         /** @var \DateTime $datetime */
         foreach($dateperiod as $datetime){
             $signal = $amplitude/2 + ($amplitude/2)*sin(M_PI*2*($datetime->getTimestamp()%86400)/86400);
-            $signal += $noiseAmplitude*(rand()%1000)/1000; // Random value between -1 and 1, times noise amplitude
+            $signal += $amplitude*$noiseRate*(rand()%1000)/1000; // Random value between -1 and 1, times noise amplitude
             $series[] = array('datetime' => $datetime, 'value' => $signal);
         }
 
