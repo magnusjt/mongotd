@@ -14,10 +14,10 @@ class AnomalyScannerKs extends AnomalyScanner{
     private $windowLengthInSeconds = 7200;
 
     /** @var float  */
-    private $dTreshold = 0.5;
+    private $dTreshold = 0.4;
 
     /** @var float  */
-    private $pTreshold = 0.01;
+    private $pTreshold = 0.001;
 
     /**
      * @param $cvs CounterValue[]
