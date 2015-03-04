@@ -47,7 +47,9 @@ abstract class AnomalyScanner{
      * @return number[]
      */
     protected function getValsWithinWindows($nid, $sid, $datetimeStart, $datetimeEnd, $windowLengthInSeconds, $windowEndPosition){
+        //!! NBNBNB: This method is probably just wrong, due to difficulties windowing values spanning border between days
         $tsStart = $datetimeStart->getTimestamp();
+        $tsStart -= $windowLengthInSeconds;
         $tsEnd = $datetimeEnd->getTimestamp();
         $mongodateStart = new \MongoDate($tsStart-$tsStart%86400);
         $mongodateEnd = new \MongoDate($tsEnd-$tsEnd%86400);
@@ -59,21 +61,23 @@ abstract class AnomalyScanner{
            'vals' => array('$ne' => null)
         ), array('vals' => 1));
 
-        $offset = 0;
-        $windowStartPosition = $windowEndPosition - $windowLengthInSeconds;
+        $upper1 = $windowEndPosition;
+        $lower1 = $windowEndPosition - $windowLengthInSeconds;
+        $upper2 = $upper1;
+        $lower2 = $lower1;
 
-        // Move window into positive range if needed
-        if($windowStartPosition < 0){
-            $offset = -1*$windowStartPosition;
-            $windowEndPosition += $offset;
-            $windowStartPosition = 0;
+        if($lower2 < 0){
+            // Window spans two days, so create one window for each of the two days
+            $lower1 = 0;
+            $lower2 = 86400 + $lower2;
+            $upper2 = 0;
         }
 
         $vals = array();
         foreach($cursor as $doc){
             foreach($doc['vals'] as $second => $val){
-                $secondOffset = ($second+$offset)%86400;
-                if($val !== null and $secondOffset <= $windowEndPosition and $secondOffset >= $windowStartPosition){
+                if($val !== null and
+                   (($second >= $lower1 and $second <= $upper1) or ($second >= $lower2 and $second <= $upper2))){
                     $vals[] = $val;
                 }
             }
