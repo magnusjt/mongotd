@@ -43,6 +43,7 @@ class AnomalyScannerHw extends AnomalyScanner{
             $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid));
 
             if($doc){
+                $created = new \DateTime('@'.$doc['created']->sec);
                 $cache->level = $doc['level'];
                 $cache->trend = $doc['trend'];
                 $cache->pred = $doc['pred'];
@@ -52,9 +53,11 @@ class AnomalyScannerHw extends AnomalyScanner{
                     $cache->dev = $doc['season'][$seasonIndex]['dev'];
                 }
             }else{
+                $created = $cv->datetime;
                 $col->insert(array(
                                  'sid'       => $cache->sid,
                                  'nid'       => $cache->nid,
+                                 'created'   => new \MongoDate($created->getTimestamp()),
                                  'level'     => $cache->level,
                                  'trend'     => $cache->trend,
                                  'pred'      => $cache->pred,
@@ -64,7 +67,8 @@ class AnomalyScannerHw extends AnomalyScanner{
                 );
             }
 
-            if($this->updateHwCache($cache, $cv->value)){
+            if($this->updateHwCache($cache, $cv->value) and
+               $cv->datetime->diff($created)->days > 12){
                 $this->storeAnomaly($cv->nid, $cv->sid, $cv->datetime, $cache->pred, $cv->value);
             }
 
