@@ -26,20 +26,17 @@ class AnomalyScannerKs extends AnomalyScanner{
      */
     public function scan($cvs){
         foreach($cvs as $cv){
-            $controlEndDate = clone $cv->datetime;
-            $controlEndDate->sub(\DateInterval::createFromDateString('1 day'));
-            $controlStartDate = clone $controlEndDate;
-            $controlStartDate->sub(\DateInterval::createFromDateString($this->daysToScan . ' days'));
-            $windowEndPosition = $cv->datetime->getTimestamp()%86400;
+            $datetimeMinusOneDay = clone $cv->datetime;
+            $datetimeMinusOneDay->sub(\DateInterval::createFromDateString('1 day'));
 
-            $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $controlStartDate, $controlEndDate, $this->windowLengthInSeconds, $windowEndPosition);
+            $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $datetimeMinusOneDay, $this->daysToScan, $this->windowLengthInSeconds);
 
             // Prevent anomaly detection when there is little to no data
             if(count($prevDataPoints) < $this->daysToScan){
                 continue;
             }
 
-            $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, $cv->datetime, $this->windowLengthInSeconds, $windowEndPosition);
+            $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, 0, $this->windowLengthInSeconds);
             $ks = $this->calculateKsTwoSided($prevDataPoints, $currDataPoints);
 
             if($ks !== false and $ks['p'] < $this->pTreshold and $ks['d'] > $this->dTreshold){

@@ -39,17 +39,24 @@ abstract class AnomalyScanner{
     /**
      * @param $nid                   int
      * @param $sid                   int
-     * @param $datetimeStart         \DateTime
      * @param $datetimeEnd           \DateTime
+     * @param $nDays                 int
      * @param $windowLengthInSeconds int
-     * @param $windowEndPosition     int
      *
-     * @return number[]
+     * @return \number[]
+     * @throws \Exception
      */
-    protected function getValsWithinWindows($nid, $sid, $datetimeStart, $datetimeEnd, $windowLengthInSeconds, $windowEndPosition){
-        //!! NBNBNB: This method is probably just wrong, due to difficulties windowing values spanning border between days
+    protected function getValsWithinWindows($nid, $sid, $datetimeEnd, $nDays, $windowLengthInSeconds){
+        if($windowLengthInSeconds >= 86400){
+            throw new \Exception('Window length must be less than 86400 seconds');
+        }
+
+        $datetimeEnd = clone $datetimeEnd;
+        $datetimeStart = clone $datetimeEnd;
+        $datetimeStart->sub(\DateInterval::createFromDateString($nDays . ' days'));
+        $datetimeStart->sub(\DateInterval::createFromDateString($windowLengthInSeconds . ' seconds'));
+
         $tsStart = $datetimeStart->getTimestamp();
-        $tsStart -= $windowLengthInSeconds;
         $tsEnd = $datetimeEnd->getTimestamp();
         $mongodateStart = new \MongoDate($tsStart-$tsStart%86400);
         $mongodateEnd = new \MongoDate($tsEnd-$tsEnd%86400);
@@ -59,25 +66,25 @@ abstract class AnomalyScanner{
            'nid' => $nid,
            'sid' => $sid,
            'vals' => array('$ne' => null)
-        ), array('vals' => 1));
+        ), array('vals' => 1, 'mongodate' => 1));
 
-        $upper1 = $windowEndPosition;
-        $lower1 = $windowEndPosition - $windowLengthInSeconds;
-        $upper2 = $upper1;
-        $lower2 = $lower1;
-
-        if($lower2 < 0){
-            // Window spans two days, so create one window for each of the two days
-            $lower1 = 0;
-            $lower2 = 86400 + $lower2;
-            $upper2 = 0;
-        }
+        $windowEndPosition = $tsEnd%86400;
+        $offset = $windowEndPosition - $windowLengthInSeconds;
 
         $vals = array();
         foreach($cursor as $doc){
+            $tsDay = $doc['mongodate']->sec;
             foreach($doc['vals'] as $second => $val){
-                if($val !== null and
-                   (($second >= $lower1 and $second <= $upper1) or ($second >= $lower2 and $second <= $upper2))){
+                if($val === null){
+                    continue;
+                }
+
+                $secondOffset = ($second - $offset)%86400;
+                if($secondOffset >= 0 and
+                   $secondOffset <= $windowLengthInSeconds and
+                   $second + $tsDay >= $tsStart and
+                   $second + $tsDay <= $tsEnd
+                ){
                     $vals[] = $val;
                 }
             }
@@ -85,23 +92,4 @@ abstract class AnomalyScanner{
 
         return $vals;
     }
-
-    /**
-     * @param $windowLengthInSeconds int
-     * @param $windowEndPosition     int
-     *
-     * @return string[]
-     */
-    private function getProjection($windowLengthInSeconds, $windowEndPosition){
-        $projection = array();
-        for($i = 0; $i < $windowLengthInSeconds; $i++){
-            if($windowEndPosition - $i < 0){
-                $windowEndPosition = 86400 + $i;
-            }
-            $projection['vals.' . ($windowEndPosition - $i)] = 1;
-        }
-
-        return $projection;
-    }
-
 }
