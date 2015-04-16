@@ -19,7 +19,7 @@ gpgcheck=0
 enabled=1" > /etc/yum.repos.d/mongodb.repo
 
 # Install apache, php, and mongodb. Need some devel stuff to be able to build mongodb as well.
-yum -y --enablerepo=remi,remi-php55 install httpd php php-common php-devel php-cli php-pecl-xdebug php-pdo php-opcache php-mbstring php-mcrypt php-xml mongodb-org gcc-c++
+yum -y --enablerepo=remi,remi-php55 install httpd php php-common php-devel php-cli php-pecl-xdebug php-pdo php-opcache php-mbstring php-mcrypt php-xml mongodb-org gcc-c++ openssl-devel
 
 # Build mongo without enterprise support stuff (thats why we pipe to no)
 no | pecl install mongo
