@@ -19,34 +19,13 @@ class Mongotd{
     }
 
     /**
-     * @param $interval               int     Number of seconds between each collected sample. Default 300 seconds = 5 minutes
-     * @param $doAnomalyDetection     bool
-     * @param $anomalyDetectionMethod string (ks|hw|sigma)
-     *
      * @return Inserter Interval is the expected number of seconds between each collected sample.
      * @throws \Exception
-     *
-     * Interval is the expected number of seconds between each collected sample.
-     * Incremental values are scaled to represent the change in interval seconds.
-     * Space in database is preallocated for values at the interval, and the time for a data point is rounded
-     * down to the nearest interval point.
-     *
      */
-    public function getInserter($interval = Resolution::FIVE_MINUTES, $doAnomalyDetection = false, $anomalyDetectionMethod = 'ks'){
-        $gaugeInserter = new GaugeInserter($this->conn, $interval, $this->logger);
-        $deltaConverter = new DeltaConverter($this->conn, $interval, $this->logger);
-
-        if($anomalyDetectionMethod == 'ks'){
-            $scanner = new AnomalyScannerKs($this->conn);
-        }else if($anomalyDetectionMethod == 'hw'){
-            $scanner = new AnomalyScannerHw($this->conn);
-        }else if($anomalyDetectionMethod == 'sigma'){
-            $scanner = new AnomalyScanner3Sigma($this->conn);
-        }else{
-            throw new \Exception('Unknown anomaly scan method');
-        }
-
-        return new Inserter($gaugeInserter, $deltaConverter, $doAnomalyDetection, $scanner);
+    public function getInserter(){
+        $gaugeInserter = new GaugeInserter($this->conn, $this->logger);
+        $deltaConverter = new DeltaConverter($this->conn, $this->logger);
+        return new Inserter($gaugeInserter, $deltaConverter);
     }
 
     /**
