@@ -13,26 +13,16 @@ abstract class AnomalyScanner{
     }
 
     /**
-     * @param $cvs CounterValue[]
-     *
-     * @return
-     */
-    abstract public function scan($cvs);
-
-    /**
-     * @param $nid       int
-     * @param $sid       int
-     * @param $datetime  \DateTime
+     * @param $cv        CounterValue
      * @param $predicted number
-     * @param $actual    number
      */
-    protected function storeAnomaly($nid, $sid, \DateTime $datetime, $predicted, $actual){
+    protected function storeAnomaly(CounterValue $cv, $predicted){
         $this->conn->col('anomalies')->insert(array(
-            'nid' => $nid,
-            'sid' => $sid,
+            'nid' => $cv->nid,
+            'sid' => $cv->sid,
             'predicted' => $predicted,
-            'actual' => $actual,
-            'mongodate' => new \MongoDate($datetime->getTimestamp())
+            'actual' => $cv->value,
+            'mongodate' => new \MongoDate($cv->datetime->getTimestamp())
         ));
     }
 
