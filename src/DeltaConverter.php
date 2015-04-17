@@ -10,17 +10,22 @@ class DeltaConverter{
     private $logger;
 
     /** @var int  */
-    private $interval;
+    private $intervalInSeconds = 300;
 
     /**
      * @param $conn Connection
-     * @param $interval int
      * @param LoggerInterface $logger
      */
-    public function __construct($conn, $interval, LoggerInterface $logger = NULL){
+    public function __construct($conn, LoggerInterface $logger = NULL){
         $this->conn = $conn;
         $this->logger = $logger;
-        $this->interval = $interval;
+    }
+
+    /**
+     * @param int $intervalInSeconds Determines what interval the delta-calc will be scaled for
+     */
+    public function setInterval($intervalInSeconds = 300){
+        $this->intervalInSeconds = $intervalInSeconds;
     }
 
     /**
@@ -69,8 +74,8 @@ class DeltaConverter{
         $secondsPast = $timestamp - $timestampPrev;
 
         $deltaValue = false;
-        if($secondsPast > 0 and $secondsPast <= 3*$this->interval){
-            $deltaValue = ($value - $valuePrev) * ($this->interval / $secondsPast);
+        if($secondsPast > 0 and $secondsPast <= 3*$this->intervalInSeconds){
+            $deltaValue = ($value - $valuePrev) * ($this->intervalInSeconds / $secondsPast);
         }
 
         return $deltaValue;
