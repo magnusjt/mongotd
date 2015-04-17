@@ -1,5 +1,8 @@
 <?php
 
+use \Mongotd\Connection;
+use \Mongotd\Mongotd;
+
 class StorageTest extends PHPUnit_Framework_TestCase{
     /** @var  \Mongotd\Connection */
     protected $conn;
@@ -7,15 +10,16 @@ class StorageTest extends PHPUnit_Framework_TestCase{
     protected $mongotd;
 
     public function setUp(){
-        $this->conn = new \Mongotd\Connection('localhost', 'test', 'test');
-        $this->mongotd = new \Mongotd\Mongotd($this->conn);
+        $this->conn = Connection::fromParameters('localhost', 'test', 'test');
+        $this->mongotd = new Mongotd($this->conn);
         $this->conn->dropDb();
     }
 
     public function test_StoreGaugeValue_RetrievesSameValue(){
         $someResolution = \Mongotd\Resolution::FIFTEEEN_MINUTES;
         $someAggregation = \Mongotd\Aggregation::SUM;
-        $inserter = $this->mongotd->getInserter($someResolution);
+        $inserter = $this->mongotd->getInserter();
+        $inserter->setInterval($someResolution);
         $retriever = $this->mongotd->getRetriever();
         $someSid = 1;
         $someNid = 1;
@@ -38,7 +42,8 @@ class StorageTest extends PHPUnit_Framework_TestCase{
     public function test_StoreTwoIncrementalValues_RetrievesDifference(){
         $resolution15min = \Mongotd\Resolution::FIFTEEEN_MINUTES;
         $someAggregation = \Mongotd\Aggregation::SUM;
-        $inserter = $this->mongotd->getInserter($resolution15min);
+        $inserter = $this->mongotd->getInserter();
+        $inserter->setInterval($resolution15min);
         $retriever = $this->mongotd->getRetriever();
         $someSid = 1;
         $someNid = 1;

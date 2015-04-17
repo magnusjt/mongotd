@@ -1,5 +1,8 @@
 <?php
 
+use \Mongotd\Connection;
+use \Mongotd\Mongotd;
+
 class AggregationTest extends PHPUnit_Framework_TestCase{
     /** @var  \Mongotd\Connection */
     protected $conn;
@@ -7,8 +10,8 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
     protected $mongotd;
 
     public function setUp(){
-        $this->conn = new \Mongotd\Connection('localhost', 'test', 'test');
-        $this->mongotd = new \Mongotd\Mongotd($this->conn);
+        $this->conn = Connection::fromParameters('localhost', 'test', 'test');
+        $this->mongotd = new Mongotd($this->conn);
         $this->conn->dropDb();
     }
 
@@ -16,7 +19,8 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
         $retrieveAtDayResolution = \Mongotd\Resolution::DAY;
         $insertAtHourResolution = \Mongotd\Resolution::HOUR;
         $sumAggregation = \Mongotd\Aggregation::SUM;
-        $inserter = $this->mongotd->getInserter($insertAtHourResolution);
+        $inserter = $this->mongotd->getInserter();
+        $inserter->setInterval($insertAtHourResolution);
         $retriever = $this->mongotd->getRetriever();
         $incrementalIsFalse = false;
         $someSid = 1;

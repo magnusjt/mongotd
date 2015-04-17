@@ -12,7 +12,6 @@
     "doRetrievalTest":         true,
     "retrieveAggregation":     1,
     "retrieveResolution":      300,
-    "doAnomalyDetection":      true,
-    "anomalyDetectionMethod":  "ks",
+    "anomalyDetectionMethod":  "sigma",
     "nIterations":             60
 }

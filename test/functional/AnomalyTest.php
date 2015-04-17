@@ -2,14 +2,34 @@
 require __DIR__ . '/../../vendor/autoload.php';
 date_default_timezone_set('Europe/Oslo');
 
+use \Mongotd\Connection;
+use \Mongotd\Mongotd;
+use \Mongotd\AnomalyScanner3Sigma;
+use \Mongotd\AnomalyScannerHw;
+use \Mongotd\AnomalyScannerKs;
+
 $config = json_decode(file_get_contents('anomalyTestConfig.json'), true);
-$conn    = new \Mongotd\Connection($config['dbhost'], $config['dbname'], $config['dbprefix']);
-$mongotd = new \Mongotd\Mongotd($conn);
+$conn = Connection::fromParameters($config['dbhost'], $config['dbname'], $config['dbprefix']);
+$mongotd = new Mongotd($conn);
 $conn->dropDb();
 $mongotd->ensureIndexes();
-$inserter = $mongotd->getInserter($config['insertIntervalInSeconds'], true, $config['anomalyDetectionMethod']);
+$inserter = $mongotd->getInserter();
 $retriever = $mongotd->getRetriever();
 $signalGenerator = new \Mongotd\SignalGenerator();
+
+$inserter->setInterval($config['insertIntervalInSeconds']);
+
+if($config['anomalyDetectionMethod'] == 'ks'){
+    $scanner = new AnomalyScannerKs($conn);
+}else if($config['anomalyDetectionMethod'] == 'hw'){
+    $scanner = new AnomalyScannerHw($conn);
+}else if($config['anomalyDetectionMethod'] == 'sigma'){
+    $scanner = new AnomalyScanner3Sigma($conn);
+}else{
+    throw new \Exception('Unknown anomaly scan method');
+}
+
+$inserter->setAnomalyScanner($scanner);
 
 $series = $signalGenerator->generateSineDailyPeriodWithNoise($config['nDays'], $config['insertIntervalInSeconds'], $config['noiseRate']);
 
