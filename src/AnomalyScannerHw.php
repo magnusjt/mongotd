@@ -14,24 +14,53 @@ class HwCache{
 /*
  * Scans for anomalies using holt-winters algorithm
  */
-class AnomalyScannerHw extends AnomalyScanner{
+class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface{
+    /** @var int  */
+    private $minDaysScanned = 20;
+
     /** @var float Holt winters parameter */
     private $alpha = 0.05;
+
     /** @var float Holt winters parameter */
     private $beta = 0.005;
+
     /** @var float Holt winters parameter */
     private $gamma = 0.1;
 
     /** @var int How much deviation before we call something an anomaly */
-    private $scale = 3;
+    private $scoreTreshold = 3;
 
     /** @var int How many minutes one season lasts */
-    private $seasonLength = 1440;
+    private $seasonLengthInMinutes = 1440;
+
+    public function setMinDaysScanned($minDaysScanned = 20){
+        $this->minDaysScanned = $minDaysScanned;
+    }
+
+    public function setHwAlpha($alpha = 0.05){
+        $this->alpha = $alpha;
+    }
+
+    public function setHwBeta($beta = 0.005){
+        $this->beta = $beta;
+    }
+
+    public function setHwGamma($gamma = 0.1){
+        $this->gamma = $gamma;
+    }
+
+    public function setScoreTreshold($scoreTreshold = 3){
+        $this->scoreTreshold = $scoreTreshold;
+    }
+
+    public function setSeasonLength($seasonLengthInMinutes = 1440){
+        $this->seasonLengthInMinutes = $seasonLengthInMinutes;
+    }
 
     /**
      * @param $cvs CounterValue[]
      */
-    public function scan($cvs){
+    public function scan(array $cvs){
         $col = $this->conn->col('hwcache');
         $batchUpdate  = new \MongoUpdateBatch($col);
         foreach($cvs as $cv){
@@ -68,8 +97,8 @@ class AnomalyScannerHw extends AnomalyScanner{
             }
 
             if($this->updateHwCache($cache, $cv->value) and
-               $cv->datetime->diff($created)->days > 12){
-                $this->storeAnomaly($cv->nid, $cv->sid, $cv->datetime, $cache->pred, $cv->value);
+               $cv->datetime->diff($created)->days > $this->minDaysScanned){
+                $this->storeAnomaly($cv, $cache->pred);
             }
 
             $batchUpdate->add(array(
@@ -95,7 +124,7 @@ class AnomalyScannerHw extends AnomalyScanner{
      */
     private function getSeasonIndex($datetime){
         $minutes = floor($datetime->getTimestamp() / 60);
-        return $minutes % $this->seasonLength;
+        return $minutes % $this->seasonLengthInMinutes;
     }
 
     /**
@@ -113,8 +142,8 @@ class AnomalyScannerHw extends AnomalyScanner{
         $cache->pred = $levelPrev + $trendPrev + $seasonalPrev;
         $cache->val  = $val;
 
-        $upper = $cache->pred + $this->scale * $devPrev;
-        $lower = $cache->pred - $this->scale * $devPrev;
+        $upper = $cache->pred + $this->scoreTreshold * $devPrev;
+        $lower = $cache->pred - $this->scoreTreshold * $devPrev;
 
         $cache->level = $this->alpha * ($val - $seasonalPrev) + (1 - $this->alpha) * ($levelPrev + $trendPrev);
         $cache->trend = $this->beta * ($cache->level - $levelPrev) + (1 - $this->beta) * $trendPrev;

@@ -6,42 +6,74 @@ namespace Mongotd;
  * Check windows of data within smoothing window for a number of days in the past.
  * If the ks distance is large, or pValue is low, it means there is an anomaly
  */
-class AnomalyScannerKs extends AnomalyScanner{
+class AnomalyScannerKs extends AnomalyScanner implements AnomalyScannerInterface{
     /** @var int  */
-    private $daysToScan = 20;
+    private $nDaysToScan = 20;
 
     /** @var int  */
-    private $windowLengthInSeconds = 7200;
+    private $minPrevDataPoints = 20;
+
+    /** @var int */
+    private $minCurrDataPoints = 1;
+
+    /** @var int  */
+    private $windowLengthInSeconds = 900;
 
     /** @var float  */
-    private $dTreshold = 0.4;
+    private $dTreshold = 0.2;
 
     /** @var float  */
-    private $pTreshold = 0.001;
+    private $pTreshold = 0.05;
+
+    public function setDaysToScan($nDaysToScan = 20){
+        $this->nDaysToScan = $nDaysToScan;
+    }
+
+    public function setMinPrevDataPoints($minPrevDataPoints = 20){
+        $this->minPrevDataPoints = $minPrevDataPoints;
+    }
+
+    public function setMinCurrDataPoints($minCurrDataPoints = 1){
+        $this->minCurrDataPoints = $minCurrDataPoints;
+    }
+
+    public function setWindowLength($windowLengthInSeconds = 900){
+        $this->windowLengthInSeconds = $windowLengthInSeconds;
+    }
+
+    public function setDTreshold($dTreshold = 0.2){
+        $this->dTreshold = $dTreshold;
+    }
+
+    public function setPTreshold($pTreshold = 0.05){
+        $this->pTreshold = $pTreshold;
+    }
 
     /**
      * @param $cvs CounterValue[]
      *
      * @return array
      */
-    public function scan($cvs){
+    public function scan(array $cvs){
         foreach($cvs as $cv){
             $datetimeMinusOneDay = clone $cv->datetime;
             $datetimeMinusOneDay->sub(\DateInterval::createFromDateString('1 day'));
 
-            $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $datetimeMinusOneDay, $this->daysToScan, $this->windowLengthInSeconds);
-
-            // Prevent anomaly detection when there is little to no data
-            if(count($prevDataPoints) < $this->daysToScan){
+            $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $datetimeMinusOneDay, $this->nDaysToScan, $this->windowLengthInSeconds);
+            if(count($prevDataPoints) < $this->minPrevDataPoints){
                 continue;
             }
 
             $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, 0, $this->windowLengthInSeconds);
+            if(count($currDataPoints) < $this->minCurrDataPoints){
+                continue;
+            }
+
             $ks = $this->calculateKsTwoSided($prevDataPoints, $currDataPoints);
 
             if($ks !== false and $ks['p'] < $this->pTreshold and $ks['d'] > $this->dTreshold){
                 $predicted = array_sum($prevDataPoints)/count($prevDataPoints); // Not really a good prediction, but KS doesn't deal in predictions
-                $this->storeAnomaly($cv->nid, $cv->sid, $cv->datetime, $predicted, $cv->value);
+                $this->storeAnomaly($cv, $predicted);
             }
         }
     }
@@ -89,8 +121,7 @@ class AnomalyScannerKs extends AnomalyScanner{
             return abs($elem1 - $elem2);
         }, $cdf1, $cdf2));
 
-        $pValue = $this->kolmogorovDistribution(sqrt(($n1+$n2)/($n1*$n2))*$largestDiff);
-
+        $pValue = 1 - $this->kolmogorovDistribution(sqrt(($n1*$n2)/($n1+$n2))*$largestDiff);
         return array('d' => $largestDiff, 'p' => $pValue);
     }
 
