@@ -7,7 +7,7 @@ class Inserter{
     /** @var  DeltaConverter */
     private $deltaConverter;
 
-    /** @var  AnomalyScanner */
+    /** @var  AnomalyScannerInterface */
     private $anomalyScanner = null;
 
     /** @var CounterValue[] */
