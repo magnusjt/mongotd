@@ -74,7 +74,7 @@ class DeltaConverter{
         $secondsPast = $timestamp - $timestampPrev;
 
         $deltaValue = false;
-        if($secondsPast > 0 and $secondsPast <= 3*$this->intervalInSeconds){
+        if($secondsPast > 0 and $secondsPast <= 3*$this->intervalInSeconds and $value >= $valuePrev){
             $deltaValue = ($value - $valuePrev) * ($this->intervalInSeconds / $secondsPast);
         }
 
