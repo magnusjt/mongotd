@@ -79,8 +79,8 @@ class DeltaConverter{
             return false;
         }
 
-        if($secondsPast > 3*$this->intervalInSeconds){
-            $this->logger->debug('Delta-calc failed because more than 3 intervals passed before getting the next value');
+        if($secondsPast > 6*$this->intervalInSeconds){
+            $this->logger->debug('Delta-calc failed because more than 6 intervals passed before getting the next value');
             return false;
         }
 
