@@ -1,5 +1,9 @@
 <?php namespace Mongotd;
 
+use \MongoUpdateBatch;
+use \MongoDate;
+use \DateTime;
+
 class HwCache{
     public $sid       = NULL;
     public $nid       = NULL;
@@ -11,7 +15,7 @@ class HwCache{
     public $dev       = 0;
 }
 
-/*
+/**
  * Scans for anomalies using holt-winters algorithm
  */
 class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface{
@@ -62,7 +66,7 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
      */
     public function scan(array $cvs){
         $col = $this->conn->col('hwcache');
-        $batchUpdate  = new \MongoUpdateBatch($col);
+        $batchUpdate  = new MongoUpdateBatch($col);
         foreach($cvs as $cv){
             $cache = new HwCache();
             $cache->sid = $cv->sid;
@@ -72,7 +76,7 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
             $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid));
 
             if($doc){
-                $created = new \DateTime('@'.$doc['created']->sec);
+                $created = new DateTime('@'.$doc['created']->sec);
                 $cache->level = $doc['level'];
                 $cache->trend = $doc['trend'];
                 $cache->pred = $doc['pred'];
@@ -86,7 +90,7 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
                 $col->insert(array(
                                  'sid'       => $cache->sid,
                                  'nid'       => $cache->nid,
-                                 'created'   => new \MongoDate($created->getTimestamp()),
+                                 'created'   => new MongoDate($created->getTimestamp()),
                                  'level'     => $cache->level,
                                  'trend'     => $cache->trend,
                                  'pred'      => $cache->pred,

@@ -1,7 +1,9 @@
 <?php
 namespace Mongotd;
 
-/*
+use \DateInterval;
+
+/**
  * Class takes a list of nids/sids to scan for anomalies using 3 sigma method.
  * It looks at values at the same time period each day for a specified number of days back in time.
  * If the current value differs more than 3 standard deviations from the average at this time of day,
@@ -54,7 +56,7 @@ class AnomalyScanner3Sigma extends AnomalyScanner implements AnomalyScannerInter
     public function scan(array $cvs){
         foreach($cvs as $cv){
             $datetimeMinusOneDay = clone $cv->datetime;
-            $datetimeMinusOneDay->sub(\DateInterval::createFromDateString('1 day'));
+            $datetimeMinusOneDay->sub(DateInterval::createFromDateString('1 day'));
 
             $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $datetimeMinusOneDay, $this->nDaysToScan, $this->windowLengthInSeconds);
             if(count($prevDataPoints) < $this->minPrevDataPoints){

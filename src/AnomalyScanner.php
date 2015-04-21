@@ -1,15 +1,22 @@
 <?php
 namespace Mongotd;
 
+use \Psr\Log\LoggerInterface;
+use \Exception;
+use \DateInterval;
+use \DateTime;
+use \MongoDate;
+
 abstract class AnomalyScanner{
     /** @var Connection  */
     protected $conn;
 
-    /**
-     * @param $conn Connection
-     */
-    public function __construct($conn){
+    /** @var  LoggerInterface */
+    protected $logger;
+
+    public function __construct(Connection $conn, LoggerInterface $logger){
         $this->conn = $conn;
+        $this->logger = $logger;
     }
 
     /**
@@ -22,34 +29,34 @@ abstract class AnomalyScanner{
             'sid' => $cv->sid,
             'predicted' => $predicted,
             'actual' => $cv->value,
-            'mongodate' => new \MongoDate($cv->datetime->getTimestamp())
+            'mongodate' => new MongoDate($cv->datetime->getTimestamp())
         ));
     }
 
     /**
      * @param $nid                   int
      * @param $sid                   int
-     * @param $datetimeEnd           \DateTime
+     * @param $datetimeEnd           DateTime
      * @param $nDays                 int
      * @param $windowLengthInSeconds int
      *
      * @return \number[]
      * @throws \Exception
      */
-    protected function getValsWithinWindows($nid, $sid, $datetimeEnd, $nDays, $windowLengthInSeconds){
+    protected function getValsWithinWindows($nid, $sid, DateTime $datetimeEnd, $nDays, $windowLengthInSeconds){
         if($windowLengthInSeconds >= 86400){
-            throw new \Exception('Window length must be less than 86400 seconds');
+            throw new Exception('Window length must be less than 86400 seconds');
         }
 
         $datetimeEnd = clone $datetimeEnd;
         $datetimeStart = clone $datetimeEnd;
-        $datetimeStart->sub(\DateInterval::createFromDateString($nDays . ' days'));
-        $datetimeStart->sub(\DateInterval::createFromDateString($windowLengthInSeconds . ' seconds'));
+        $datetimeStart->sub(DateInterval::createFromDateString($nDays . ' days'));
+        $datetimeStart->sub(DateInterval::createFromDateString($windowLengthInSeconds . ' seconds'));
 
         $tsStart = $datetimeStart->getTimestamp();
         $tsEnd = $datetimeEnd->getTimestamp();
-        $mongodateStart = new \MongoDate($tsStart-$tsStart%86400);
-        $mongodateEnd = new \MongoDate($tsEnd-$tsEnd%86400);
+        $mongodateStart = new MongoDate($tsStart-$tsStart%86400);
+        $mongodateEnd = new MongoDate($tsEnd-$tsEnd%86400);
 
         $cursor = $this->conn->col('cv')->find(array(
            'mongodate' => array('$gte' => $mongodateStart, '$lte' => $mongodateEnd),

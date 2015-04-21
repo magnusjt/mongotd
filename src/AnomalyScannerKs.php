@@ -1,7 +1,9 @@
 <?php
 namespace Mongotd;
 
-/*
+use \DateInterval;
+
+/**
  * Scan for anomalies using kolmogorov-smirnov test
  * Check windows of data within smoothing window for a number of days in the past.
  * If the ks distance is large, or pValue is low, it means there is an anomaly
@@ -57,7 +59,7 @@ class AnomalyScannerKs extends AnomalyScanner implements AnomalyScannerInterface
     public function scan(array $cvs){
         foreach($cvs as $cv){
             $datetimeMinusOneDay = clone $cv->datetime;
-            $datetimeMinusOneDay->sub(\DateInterval::createFromDateString('1 day'));
+            $datetimeMinusOneDay->sub(DateInterval::createFromDateString('1 day'));
 
             $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $datetimeMinusOneDay, $this->nDaysToScan, $this->windowLengthInSeconds);
             if(count($prevDataPoints) < $this->minPrevDataPoints){

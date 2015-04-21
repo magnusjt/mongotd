@@ -1,6 +1,12 @@
 <?php namespace Mongotd;
 
 use \Psr\Log\LoggerInterface;
+use \DateTime;
+use \DatePeriod;
+use \DateInterval;
+use \DateTimeZone;
+use \MongoDate;
+use \MongoCursor;
 
 class Retriever{
     /** @var  Connection */
@@ -9,13 +15,9 @@ class Retriever{
     /** @var  LoggerInterface */
     private $logger;
 
-    /**
-     * @param $conn Connection
-     * @param $logger LoggerInterface
-     */
-    public function __construct($conn, $logger = NULL){
-        $this->conn       = $conn;
-        $this->logger     = $logger;
+    public function __construct(Connection $conn, LoggerInterface $logger){
+        $this->conn = $conn;
+        $this->logger = $logger;
     }
 
     /**
@@ -62,12 +64,12 @@ class Retriever{
             throw new \Exception('Invalid resolution given');
         }
 
-        $end->add(\DateInterval::createFromDateString($interval));
-        $dateperiod = new \DatePeriod($start, \DateInterval::createFromDateString($interval), $end);
+        $end->add(DateInterval::createFromDateString($interval));
+        $dateperiod = new DatePeriod($start, \DateInterval::createFromDateString($interval), $end);
 
         $cursor = $this->conn->col('cv')->find(array('sid' => $sid, 'nid' => $nid, 'mongodate' => array(
-                                                                        '$gte' => new \MongoDate($start->setTimezone(new \DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()),
-                                                                        '$lte' => new \MongoDate($end->setTimezone(new \DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()))
+                                                                        '$gte' => new MongoDate($start->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()),
+                                                                        '$lte' => new MongoDate($end->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()))
                                                ), array('mongodate' => 1, 'vals' => 1));
 
         $valsByDate = $this->getValsByDate($cursor, $aggregation, $clampFunction, $targetTimezone);
@@ -82,7 +84,15 @@ class Retriever{
         return $valsByDate;
     }
 
-    private function getValsByDate($cursor, $aggregation, $clampFunction, $targetTimezone){
+    /**
+     * @param $cursor MongoCursor
+     * @param $aggregation int
+     * @param $clampFunction
+     * @param $targetTimezone DateTimeZone
+     *
+     * @return array
+     */
+    private function getValsByDate($cursor, $aggregation, $clampFunction, DateTimeZone $targetTimezone){
         $valsByDate = array();
         $countsByDate = array();
         foreach($cursor as $doc){
@@ -94,7 +104,7 @@ class Retriever{
 
                 // Clamp the datetime so it is unique for the current resolution
                 // Also convert to local timezone so date strings are local.
-                $datetime = new \DateTime('@'.($timestamp+$seconds));
+                $datetime = new DateTime('@'.($timestamp+$seconds));
                 $datetime->setTimezone($targetTimezone);
                 $dateStr = call_user_func($clampFunction, $datetime)->format('Y-m-d H:i:s');
 
@@ -127,16 +137,16 @@ class Retriever{
     }
 
     /**
-     * @param $datetimeFrom \DateTime
-     * @param $datetimeTo   \DateTime
+     * @param $datetimeFrom DateTime
+     * @param $datetimeTo   DateTime
      * @param $minCount     int
      * @param $maxResults   int|bool
      *
      * @return array
      */
-    public function getAnomalies($datetimeFrom, $datetimeTo, $minCount = 1, $maxResults = false){
+    public function getAnomalies(DateTime $datetimeFrom, DateTime $datetimeTo, $minCount = 1, $maxResults = false){
         $cursor = $this->conn->col('anomalies')->find(array(
-            'mongodate' => array('$gte' => new \MongoDate($datetimeFrom->getTimestamp()), '$lte' => new \MongoDate($datetimeTo->getTimestamp()))
+            'mongodate' => array('$gte' => new MongoDate($datetimeFrom->getTimestamp()), '$lte' => new MongoDate($datetimeTo->getTimestamp()))
         ));
 
         $anomalies = array();

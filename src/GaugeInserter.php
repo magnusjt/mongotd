@@ -1,6 +1,8 @@
 <?php namespace Mongotd;
 
-use Psr\Log\LoggerInterface;
+use \Psr\Log\LoggerInterface;
+use \MongoDate;
+use \MongoUpdateBatch;
 
 class GaugeInserter{
     /** @var  Connection */
@@ -15,7 +17,7 @@ class GaugeInserter{
     /** @var int  */
     private $secondsInADay = 86400;
 
-    public function __construct($conn, LoggerInterface $logger = NULL){
+    public function __construct(Connection $conn, LoggerInterface $logger){
         $this->conn = $conn;
         $this->logger = $logger;
     }
@@ -30,14 +32,14 @@ class GaugeInserter{
     /**
      * @param $cvs CounterValue[]
      */
-    public function insert($cvs){
+    public function insert(array $cvs){
         $col = $this->conn->col('cv');
-        $batchUpdate = new \MongoUpdateBatch($col);
+        $batchUpdate = new MongoUpdateBatch($col);
 
         foreach($cvs as $cv){
             $timestamp = $cv->datetime->getTimestamp();
             $secondsIntoThisDay = $timestamp%$this->secondsInADay;
-            $mongodate = new \MongoDate($timestamp - $secondsIntoThisDay);
+            $mongodate = new MongoDate($timestamp - $secondsIntoThisDay);
 
             $this->preAllocateIfNecessary($col, $cv->sid, $cv->nid, $mongodate);
 
@@ -55,12 +57,12 @@ class GaugeInserter{
      * @param $col \MongoCollection
      * @param $sid int
      * @param $nid int
-     * @param $mongodate \MongoDate
+     * @param $mongodate MongoDate
      *
      * Preallocate a days worth of data. Only done once a day, so shouldn't be too taxing.
      * The thing that takes time is checking for existing data.
      */
-    private function preAllocateIfNecessary($col, $sid, $nid, $mongodate){
+    private function preAllocateIfNecessary($col, $sid, $nid, MongoDate $mongodate){
         if($col->find(array('sid' => $sid, 'nid' => $nid, 'mongodate' => $mongodate), array('sid' => 1))->limit(1)->count() == 0){
             $valsPerSec = array();
             for($second = 0; $second < $this->secondsInADay; $second += $this->intervalInSeconds){

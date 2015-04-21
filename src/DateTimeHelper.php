@@ -1,6 +1,8 @@
 <?php
 namespace Mongotd;
 
+use \DateTime;
+
 class DateTimeHelper{
     /**
      * @param $datetime \DateTime
@@ -17,7 +19,7 @@ class DateTimeHelper{
      * @return \DateTime
      */
     static public function clampToWeek($datetime){
-        $datetime = new \DateTime($datetime->format('o-\WW-1')); // 1 is monday. o is year taking into account week number 53 and such.
+        $datetime = new DateTime($datetime->format('o-\WW-1')); // 1 is monday. o is year taking into account week number 53 and such.
         $datetime->setTime(0, 0, 0);
         return $datetime;
     }
