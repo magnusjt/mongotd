@@ -13,9 +13,9 @@ class Mongotd{
      * @param $conn Connection
      * @param $logger LoggerInterface
      */
-    public function __construct($conn, LoggerInterface $logger = null){
+    public function __construct(Connection $conn, LoggerInterface $logger = null){
         $this->conn = $conn;
-        $this->logger = $logger;
+        $this->logger = new Logger($logger);
     }
 
     /**
@@ -25,7 +25,7 @@ class Mongotd{
     public function getInserter(){
         $gaugeInserter = new GaugeInserter($this->conn, $this->logger);
         $deltaConverter = new DeltaConverter($this->conn, $this->logger);
-        return new Inserter($gaugeInserter, $deltaConverter);
+        return new Inserter($gaugeInserter, $deltaConverter, $this->logger);
     }
 
     /**
@@ -33,6 +33,27 @@ class Mongotd{
      */
     public function getRetriever(){
         return new Retriever($this->conn, $this->logger);
+    }
+
+    /**
+     * @return AnomalyScanner3Sigma
+     */
+    public function getAnomalyScanner3Sigma(){
+        return new AnomalyScanner3Sigma($this->conn, $this->logger);
+    }
+
+    /**
+     * @return AnomalyScannerHw
+     */
+    public function getAnomalyScannerHw(){
+        return new AnomalyScannerHw($this->conn, $this->logger);
+    }
+
+    /**
+     * @return AnomalyScannerKs
+     */
+    public function getAnomalyScannerKs(){
+        return new AnomalyScannerKs($this->conn, $this->logger);
     }
 
     /**
