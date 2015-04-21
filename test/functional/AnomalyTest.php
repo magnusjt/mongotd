@@ -4,14 +4,11 @@ date_default_timezone_set('Europe/Oslo');
 
 use \Mongotd\Connection;
 use \Mongotd\Mongotd;
-use \Mongotd\AnomalyScanner3Sigma;
-use \Mongotd\AnomalyScannerHw;
-use \Mongotd\AnomalyScannerKs;
 
 $config = json_decode(file_get_contents('anomalyTestConfig.json'), true);
-$conn = Connection::fromParameters($config['dbhost'], $config['dbname'], $config['dbprefix']);
+$conn = new Connection($config['dbhost'], $config['dbname'], $config['dbprefix']);
 $mongotd = new Mongotd($conn);
-$conn->dropDb();
+$conn->db()->drop();
 $mongotd->ensureIndexes();
 $inserter = $mongotd->getInserter();
 $retriever = $mongotd->getRetriever();
@@ -20,16 +17,14 @@ $signalGenerator = new \Mongotd\SignalGenerator();
 $inserter->setInterval($config['insertIntervalInSeconds']);
 
 if($config['anomalyDetectionMethod'] == 'ks'){
-    $scanner = new AnomalyScannerKs($conn);
+    $inserter->setAnomalyScanner($mongotd->getAnomalyScannerKs());
 }else if($config['anomalyDetectionMethod'] == 'hw'){
-    $scanner = new AnomalyScannerHw($conn);
+    $inserter->setAnomalyScanner($mongotd->getAnomalyScannerHw());
 }else if($config['anomalyDetectionMethod'] == 'sigma'){
-    $scanner = new AnomalyScanner3Sigma($conn);
+    $inserter->setAnomalyScanner($mongotd->getAnomalyScanner3Sigma());
 }else{
     throw new \Exception('Unknown anomaly scan method');
 }
-
-$inserter->setAnomalyScanner($scanner);
 
 $series = $signalGenerator->generateSineDailyPeriodWithNoise($config['nDays'], $config['insertIntervalInSeconds'], $config['noiseRate']);
 
@@ -62,7 +57,7 @@ foreach($series as $data){
     $inserter->insert();
 
     $datetimeStartInterval = clone $data['datetime'];
-    $datetimeStartInterval->sub(\DateInterval::createFromDateString(($config['insertIntervalInSeconds']-1) . ' seconds'));
+    $datetimeStartInterval->sub(DateInterval::createFromDateString(($config['insertIntervalInSeconds']-1) . ' seconds'));
     $anomalies = $retriever->getAnomalies($datetimeStartInterval, $data['datetime']);
 
     $isAnomaly = count($anomalies) > 0;

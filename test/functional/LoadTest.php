@@ -3,16 +3,13 @@ require __DIR__ . '/../../vendor/autoload.php';
 
 use \Mongotd\Connection;
 use \Mongotd\Mongotd;
-use \Mongotd\AnomalyScanner3Sigma;
-use \Mongotd\AnomalyScannerHw;
-use \Mongotd\AnomalyScannerKs;
 
 $config = json_decode(file_get_contents('loadTestConfig.json'), true);
 date_default_timezone_set($config['timezone']);
 $start = new \DateTime($config['starttime']);
-$conn = Connection::fromParameters($config['dbhost'], $config['dbname'], $config['dbprefix']);
+$conn = new Connection($config['dbhost'], $config['dbname'], $config['dbprefix']);
 $mongotd = new Mongotd($conn);
-$conn->dropDb();
+$conn->db()->drop();
 $mongotd->ensureIndexes();
 $inserter = $mongotd->getInserter();
 $retriever = $mongotd->getRetriever();
@@ -20,11 +17,11 @@ $retriever = $mongotd->getRetriever();
 $inserter->setInterval($config['insertIntervalInSeconds']);
 
 if($config['anomalyDetectionMethod'] == 'ks'){
-    $inserter->setAnomalyScanner(new AnomalyScannerKs($conn));
+    $inserter->setAnomalyScanner($mongotd->getAnomalyScannerKs());
 }else if($config['anomalyDetectionMethod'] == 'hw'){
-    $inserter->setAnomalyScanner(new AnomalyScannerHw($conn));
+    $inserter->setAnomalyScanner($mongotd->getAnomalyScannerHw());
 }else if($config['anomalyDetectionMethod'] == 'sigma'){
-    $inserter->setAnomalyScanner(new AnomalyScanner3Sigma($conn));
+    $inserter->setAnomalyScanner($mongotd->getAnomalyScanner3Sigma());
 }
 
 $currIteration = 1;

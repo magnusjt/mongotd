@@ -2,6 +2,8 @@
 
 use \Mongotd\Connection;
 use \Mongotd\Mongotd;
+use \Mongotd\Resolution;
+use \Mongotd\Aggregation;
 
 class AggregationTest extends PHPUnit_Framework_TestCase{
     /** @var  \Mongotd\Connection */
@@ -10,15 +12,15 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
     protected $mongotd;
 
     public function setUp(){
-        $this->conn = Connection::fromParameters('localhost', 'test', 'test');
+        $this->conn = new Connection('localhost', 'test', 'test');
         $this->mongotd = new Mongotd($this->conn);
-        $this->conn->dropDb();
+        $this->conn->db()->drop();
     }
 
     public function test_SumAggregateDayOfValues_RetrievesSumOfValues(){
-        $retrieveAtDayResolution = \Mongotd\Resolution::DAY;
-        $insertAtHourResolution = \Mongotd\Resolution::HOUR;
-        $sumAggregation = \Mongotd\Aggregation::SUM;
+        $retrieveAtDayResolution = Resolution::DAY;
+        $insertAtHourResolution = Resolution::HOUR;
+        $sumAggregation = Aggregation::SUM;
         $inserter = $this->mongotd->getInserter();
         $inserter->setInterval($insertAtHourResolution);
         $retriever = $this->mongotd->getRetriever();
@@ -29,10 +31,10 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
         $hoursInDay = 24;
         $expectedSum = $someValPerHour * $hoursInDay;
         $startDateStr = '2015-02-28 00:00:00';
-        $start = new \DateTime($startDateStr);
+        $start = new DateTime($startDateStr);
         $end = clone $start;
         $end->add(DateInterval::createFromDateString('1 day'));
-        $dateperiod = new \DatePeriod($start, DateInterval::createFromDateString('1 hour'), $end);
+        $dateperiod = new DatePeriod($start, DateInterval::createFromDateString('1 hour'), $end);
         $expectedValsByDate = array(
             $startDateStr => $expectedSum
         );

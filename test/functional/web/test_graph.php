@@ -7,7 +7,7 @@ use \Mongotd\Mongotd;
 use \Mongotd\Resolution;
 use \Mongotd\Aggregation;
 
-$conn = Connection::fromParameters('localhost', 'test', 'test');
+$conn = new Connection('localhost', 'test', 'test');
 $mongotd = new Mongotd($conn, null);
 $retriever = $mongotd->getRetriever();
 
