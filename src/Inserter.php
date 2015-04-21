@@ -1,5 +1,9 @@
 <?php namespace Mongotd;
 
+use \Psr\Log\LoggerInterface;
+use \DateTime;
+use \InvalidArgumentException;
+
 class Inserter{
     /** @var  GaugeInserter */
     private $gaugeInserter;
@@ -16,11 +20,8 @@ class Inserter{
     /** @var CounterValue[] */
     private $cvsIncremental = array();
 
-    /**
-     * @param $gaugeInserter      GaugeInserter
-     * @param $deltaConverter     DeltaConverter
-     */
-    public function __construct($gaugeInserter, $deltaConverter){
+    public function __construct(GaugeInserter $gaugeInserter, DeltaConverter $deltaConverter, LoggerInterface $logger){
+        $this->logger = $logger;
         $this->gaugeInserter   = $gaugeInserter;
         $this->deltaConverter  = $deltaConverter;
 
@@ -43,13 +44,13 @@ class Inserter{
     /**
      * @param $sid           int|string
      * @param $nid           int|string
-     * @param $datetime      \DateTime
+     * @param $datetime      DateTime
      * @param $value         number
      * @param $isIncremental bool
      */
-    public function add($sid, $nid, $datetime, $value, $isIncremental = false){
+    public function add($sid, $nid, DateTime $datetime, $value, $isIncremental = false){
         if(!is_numeric($value)){
-            throw new \InvalidArgumentException('Value should be numeric');
+            throw new InvalidArgumentException('Value should be numeric');
         }
 
         $cv = new CounterValue($sid, $nid, clone $datetime, $value);
