@@ -12,11 +12,7 @@ class DeltaConverter{
     /** @var int  */
     private $intervalInSeconds = 300;
 
-    /**
-     * @param $conn Connection
-     * @param LoggerInterface $logger
-     */
-    public function __construct($conn, LoggerInterface $logger = NULL){
+    public function __construct(Connection $conn, LoggerInterface $logger = NULL){
         $this->conn = $conn;
         $this->logger = $logger;
     }
@@ -33,7 +29,7 @@ class DeltaConverter{
      *
      * @return CounterValue[]
      */
-    public function convert($cvs){
+    public function convert(array $cvs){
         $cvsDelta = array();
         $col = $this->conn->col('cv_prev');
 
@@ -73,11 +69,21 @@ class DeltaConverter{
     private function getDeltaValue($value, $valuePrev, $timestamp, $timestampPrev){
         $secondsPast = $timestamp - $timestampPrev;
 
-        $deltaValue = false;
-        if($secondsPast > 0 and $secondsPast <= 3*$this->intervalInSeconds and $value >= $valuePrev){
-            $deltaValue = ($value - $valuePrev) * ($this->intervalInSeconds / $secondsPast);
+        if($value < $valuePrev){
+            $this->logger->debug('Delta-calc failed because current value is less than previous value');
+            return false;
         }
 
-        return $deltaValue;
+        if($secondsPast <= 0){
+            $this->logger->debug('Delta-calc failed because number of seconds passed was <= 0');
+            return false;
+        }
+
+        if($secondsPast > 3*$this->intervalInSeconds){
+            $this->logger->debug('Delta-calc failed because more than 3 intervals passed before getting the next value');
+            return false;
+        }
+
+        return ($value - $valuePrev) * ($this->intervalInSeconds / $secondsPast);
     }
 }
