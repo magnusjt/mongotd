@@ -67,6 +67,13 @@ class Retriever{
         $end->add(DateInterval::createFromDateString($interval));
         $dateperiod = new DatePeriod($start, \DateInterval::createFromDateString($interval), $end);
 
+        // Create a template array with padded values
+        $valsByDatePadded = array();
+        foreach($dateperiod as $datetime){
+            $dateStr = $datetime->format('Y-m-d H:i:s');
+            $valsByDatePadded[$dateStr] = $padding;
+        }
+
         $cursor = $this->conn->col('cv')->find(array('sid' => $sid, 'nid' => $nid, 'mongodate' => array(
                                                                         '$gte' => new MongoDate($start->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()),
                                                                         '$lte' => new MongoDate($end->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()))
@@ -74,14 +81,14 @@ class Retriever{
 
         $valsByDate = $this->getValsByDate($cursor, $aggregation, $clampFunction, $targetTimezone);
 
-        foreach($dateperiod as $datetime){
-            $dateStr = $datetime->format('Y-m-d H:i:s');
-            if(!isset($valsByDate[$dateStr])){
-                $valsByDate[$dateStr] = $padding;
+        // Fill in the actual values in the template array
+        foreach($valsByDate as $dateStr => $val){
+            if(isset($valsByDatePadded[$dateStr])){
+                $valsByDatePadded[$dateStr] = $val;
             }
         }
 
-        return $valsByDate;
+        return $valsByDatePadded;
     }
 
     /**
