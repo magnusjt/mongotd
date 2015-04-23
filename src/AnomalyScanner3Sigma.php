@@ -70,7 +70,7 @@ class AnomalyScanner3Sigma extends AnomalyScanner implements AnomalyScannerInter
 
             $predicted = $this->checkForAnomaly($prevDataPoints, $currDataPoints);
             if($predicted !== false){
-                $this->storeAnomaly($cv, $predicted);
+                $this->storeAnomaly(new Anomaly($cv, $predicted));
             }
         }
     }

@@ -28,7 +28,7 @@ $valsByDateList = array();
 
 foreach($sids as $sid){
     $sid = (int)trim($sid);
-    $valsByDateList[] = $retriever->get($sid, 1, new DateTime($start), new DateTime($end), $resolution, $aggregation, null);
+    $valsByDateList[] = $retriever->get($sid, 1, new DateTime($start), new DateTime($end), $resolution, $aggregation, 'x');
     $labels[] = "SID $sid";
 }
 

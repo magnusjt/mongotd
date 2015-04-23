@@ -65,7 +65,7 @@ foreach($series as $data){
     if($isAnomaly or $expectedAnomaly){
         echo $data['datetime']->format('Y-m-d H:i') . ' - ' . $data['value'];
         if($isAnomaly){
-            echo ' Detected anomaly! (predicted avg ' . $anomalies[0]['avg'] . ')';
+            echo ' Detected anomaly! (predicted avg ' . $anomalies[0]->predicted . ')';
         }
         if($expectedAnomaly){
             echo ' Actual anomaly!';

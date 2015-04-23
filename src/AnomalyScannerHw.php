@@ -102,7 +102,7 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
 
             if($this->updateHwCache($cache, $cv->value) and
                $cv->datetime->diff($created)->days > $this->minDaysScanned){
-                $this->storeAnomaly($cv, $cache->pred);
+                $this->storeAnomaly(new Anomaly($cv, $cache->pred));
             }
 
             $batchUpdate->add(array(

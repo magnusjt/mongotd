@@ -75,7 +75,7 @@ class AnomalyScannerKs extends AnomalyScanner implements AnomalyScannerInterface
 
             if($ks !== false and $ks['p'] < $this->pTreshold and $ks['d'] > $this->dTreshold){
                 $predicted = array_sum($prevDataPoints)/count($prevDataPoints); // Not really a good prediction, but KS doesn't deal in predictions
-                $this->storeAnomaly($cv, $predicted);
+                $this->storeAnomaly(new Anomaly($cv, $predicted));
             }
         }
     }

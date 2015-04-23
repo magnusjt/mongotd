@@ -146,53 +146,25 @@ class Retriever{
     /**
      * @param $datetimeFrom DateTime
      * @param $datetimeTo   DateTime
-     * @param $minCount     int
-     * @param $maxResults   int|bool
      *
-     * @return array
+     * @return Anomaly[]
      */
-    public function getAnomalies(DateTime $datetimeFrom, DateTime $datetimeTo, $minCount = 1, $maxResults = false){
+    public function getAnomalies(DateTime $datetimeFrom, DateTime $datetimeTo){
         $cursor = $this->conn->col('anomalies')->find(array(
-            'mongodate' => array('$gte' => new MongoDate($datetimeFrom->getTimestamp()), '$lte' => new MongoDate($datetimeTo->getTimestamp()))
-        ));
+            'mongodate' => array(
+                '$gte' => new MongoDate($datetimeFrom->getTimestamp()),
+                '$lte' => new MongoDate($datetimeTo->getTimestamp())
+            )
+        ))->sort(array('nid' => 1, 'sid' => 1, 'mongodate' => 1));
 
         $anomalies = array();
         foreach($cursor as $doc){
-            $nid = $doc['nid'];
-            $sid = $doc['sid'];
-            $key = $nid . '_' . $sid;
-
-            if(!isset($anomalies[$key])){
-                $anomalies[$key] = array('nid' => $nid, 'sid' => $sid, 'count' => 0, 'avg' => $doc['predicted']);
-            }
-
-            $anomalies[$key]['count']++;
+            $datetime = new DateTime('@'.$doc['mongodate']->sec);
+            $datetime->setTimezone($datetimeFrom->getTimezone());
+            $cv = new CounterValue($doc['sid'], $doc['nid'], $datetime, $doc['actual']);
+            $anomalies[] = new Anomaly($cv, $doc['predicted']);
         }
 
-        $anomaliesWithMinCount = array();
-        foreach($anomalies as $anomaly){
-            if($anomaly['count'] >= $minCount){
-                $anomaliesWithMinCount[] = $anomaly;
-            }
-        }
-
-        foreach($anomaliesWithMinCount as $anomaly){
-            $anomaly['avg'] /= $anomaly['count'];
-        }
-
-        // Sort from largest to smallest counts
-        usort($anomaliesWithMinCount, function($a, $b){
-            if($a['count'] > $b['count']){
-                return -1;
-            }
-
-            return 1;
-        });
-
-        if($maxResults !== false){
-            return array_slice($anomaliesWithMinCount, 0, $maxResults);
-        }else{
-            return $anomaliesWithMinCount;
-        }
+        return $anomalies;
     }
 }
