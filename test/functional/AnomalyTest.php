@@ -60,12 +60,12 @@ foreach($series as $data){
     $datetimeStartInterval->sub(DateInterval::createFromDateString(($config['insertIntervalInSeconds']-1) . ' seconds'));
     $anomalies = $retriever->getAnomalies($datetimeStartInterval, $data['datetime']);
 
-    $isAnomaly = count($anomalies) > 0;
+    $isAnomaly = count($anomalies) > 0 and count($anomalies[0]['anomalies']) > 0;
 
     if($isAnomaly or $expectedAnomaly){
         echo $data['datetime']->format('Y-m-d H:i') . ' - ' . $data['value'];
         if($isAnomaly){
-            echo ' Detected anomaly! (predicted avg ' . $anomalies[0]->predicted . ')';
+            echo ' Detected anomaly! (predicted avg ' . $anomalies[0]['anomalies'][0]->predicted . ')';
         }
         if($expectedAnomaly){
             echo ' Actual anomaly!';
