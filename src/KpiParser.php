@@ -1,19 +1,32 @@
 <?php
 namespace Mongotd;
 
-# Grammar:
-# - Right recursive since we use recursive descent parsing
-#   Right recursive means that the productions never yield the symbol itself before anything else (directly or indirectly)
-# - S is the start symbol, upper case are terminals
-#
-# S          -> expr
-# INTFLOAT   -> (\d+(?:\.\d+)?)
-# ID         -> \w+\d*
-# expr       -> factor + expr | factor - expr | factor
-# factor     -> number * factor | number / factor | number
-# number     -> (expr) | [var] | INTFLOAT | - number | + number
-# var        -> assign | assign , var
-# assign     -> ID = INTFLOAT | ID = ID
+/** KPI syntax is defined by the grammar below. Here's some examples:
+ * 100 * [name=successes] / [name=attempts]
+ * [nid=1,sid=2,aggregation=Sum] + [nid=1,sid=3,aggregation=Avg]
+ *
+ * The syntax is just regular arithmetic, but with the option to specify a variable in brackets.
+ * Inside the brackets, the variable is specified by a comma separated list of name=value.
+ *
+ * When using the AstEvaluator, the values for the variables are found by using a user-supplied callback function.
+ * This function then uses the comma separated list (now an associative array) to find the correct value for this variable.
+ *
+ * The return value from the callback function should be an array!
+ *
+ * Grammar:
+ * - Right recursive since we use recursive descent parsing
+ *   Right recursive means that the productions never yield the symbol itself before anything else (directly or indirectly)
+ * - S is the start symbol, upper case are terminals
+ *
+ * S          -> expr
+ * INTFLOAT   -> (\d+(?:\.\d+)?)
+ * ID         -> \w+\d*
+ * expr       -> factor + expr | factor - expr | factor
+ * factor     -> number * factor | number / factor | number
+ * number     -> (expr) | [var] | INTFLOAT | - number | + number
+ * var        -> assign | assign , var
+ * assign     -> ID = INTFLOAT | ID = ID
+*/
 
 
 class NodeVariable{
@@ -100,13 +113,13 @@ class AstEvaluator{
 
     private function binop($left, $right, $op){
         if($op == Operator::plus){
-            return $left + $right;
+            return $this->plus($left, $right);
         }elseif($op == Operator::minus){
-            return $left - $right;
+            return $this->minus($left, $right);
         }elseif($op == Operator::multiply){
-            return $left*$right;
+            return $this->multiply($left, $right);
         }elseif($op == Operator::divide){
-            return $left/$right;
+            return $this->divide($left, $right);
         }else{
             throw new \Exception('Invalid binary operator ' . $op);
         }
@@ -116,7 +129,7 @@ class AstEvaluator{
         if($op == Operator::plus){
             return $operand;
         }elseif($op == Operator::minus){
-            return -$operand;
+            return $this->multiply(-1, $operand);
         }else{
             throw new \Exception('Invalid unary operator ' . $op);
         }
@@ -124,6 +137,78 @@ class AstEvaluator{
 
     private function variable($options){
         return call_user_func($this->variableEvaluator, $options);
+    }
+
+    private function plus($a, $b){
+        if(is_array($a) and is_array($b)){
+            return array_map(function($a, $b){
+                return $a + $b;
+            }, $a, $b);
+        }else if(is_array($a)){
+            return array_map(function($a) use($b){
+                return $a + $b;
+            }, $a);
+        }else if(is_array($b)){
+            return array_map(function($b) use($a){
+                return $a + $b;
+            }, $b);
+        }else{
+            return $a + $b;
+        }
+    }
+
+    private function minus($a, $b){
+        if(is_array($a) and is_array($b)){
+            return array_map(function($a, $b){
+                return $a - $b;
+            }, $a, $b);
+        }else if(is_array($a)){
+            return array_map(function($a) use($b){
+                return $a - $b;
+            }, $a);
+        }else if(is_array($b)){
+            return array_map(function($b) use($a){
+                return $a - $b;
+            }, $b);
+        }else{
+            return $a - $b;
+        }
+    }
+
+    private function multiply($a, $b){
+        if(is_array($a) and is_array($b)){
+            return array_map(function($a, $b){
+                return $a * $b;
+            }, $a, $b);
+        }else if(is_array($a)){
+            return array_map(function($a) use($b){
+                return $a * $b;
+            }, $a);
+        }else if(is_array($b)){
+            return array_map(function($b) use($a){
+                return $a * $b;
+            }, $b);
+        }else{
+            return $a * $b;
+        }
+    }
+
+    private function divide($a, $b){
+        if(is_array($a) and is_array($b)){
+            return array_map(function($a, $b){
+                return $a / $b;
+            }, $a, $b);
+        }else if(is_array($a)){
+            return array_map(function($a) use($b){
+                return $a / $b;
+            }, $a);
+        }else if(is_array($b)){
+            return array_map(function($b) use($a){
+                return $a / $b;
+            }, $b);
+        }else{
+            return $a / $b;
+        }
     }
 }
 

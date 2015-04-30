@@ -70,6 +70,39 @@ class KpiParserTest extends PHPUnit_Framework_TestCase{
         $this->assertEquals($expectedResult, $result, $expression . ' was equal to ' . $result);
     }
 
+    // Remember that variables are predefined in the test below
+    public function arrayArithmeticProvider(){
+        return array(
+            array('1 + [name=value]', array(2,3,4)),
+            array('1 - [name=value]', array(0,-1,-2)),
+            array('2 * [name=value]', array(2,4,6)),
+            array('6 / [name=value]', array(6,3,2)),
+            array('[name=value]*[name=value]', array(1,4,9)),
+            array('[name=value]/[name=value]', array(1,1,1)),
+            array('[name=value]-[name=value]', array(0,0,0)),
+        );
+    }
+
+    /**
+     * @dataProvider arrayArithmeticProvider
+     *
+     * @param $expression     string
+     * @param $expectedResult number
+     */
+    public function test_arrayArithmetic_EvaluateAst_MatchExpected($expression, $expectedResult){
+        $parser = new KpiParser();
+        $evaluator = new AstEvaluator();
+        $evaluator->setVariableEvaluatorCallback(function($options){
+            return array(1,2,3);
+        });
+
+        $node = $parser->parse($expression);
+        $result = $evaluator->evaluate($node);
+
+        $this->assertEquals(implode(',', $expectedResult), implode(',', $result), $expression . ' was equal to ' . implode(',', $result));
+
+    }
+
     public function syntaxErrorArithmeticProvider(){
         return array(
             array('5 +/ 5', 'Mangled operators'),
