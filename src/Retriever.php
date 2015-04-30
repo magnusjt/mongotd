@@ -15,9 +15,17 @@ class Retriever{
     /** @var  LoggerInterface */
     private $logger;
 
-    public function __construct(Connection $conn, LoggerInterface $logger){
+    /** @var  KpiParser */
+    private $kpiParser;
+
+    /** @var  AstEvaluator */
+    private $astEvaluator;
+
+    public function __construct(Connection $conn, LoggerInterface $logger, KpiParser $kpiParser, AstEvaluator $astEvaluator){
         $this->conn = $conn;
         $this->logger = $logger;
+        $this->kpiParser = $kpiParser;
+        $this->astEvaluator = $astEvaluator;
     }
 
     /**
@@ -89,6 +97,31 @@ class Retriever{
         }
 
         return $valsByDatePadded;
+    }
+
+    /**
+     * @param $nid         mixed
+     * @param $kpi         string    KPI syntax is regular arithmetic. Variables: [sid=1,res=300,agg=Sum]
+     * @param $start       DateTime
+     * @param $end         DateTime
+     * @param $resolution  int
+     * @param $aggregation int
+     * @param $padding     bool
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function getKpi($nid, $kpi, DateTime $start, DateTime $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
+        $this->astEvaluator->setVariableEvaluatorCallback(function($options) use($nid, $start, $end, $padding){
+            return $this->get($options['sid'], $nid, $start, $end, $options['res'], $options['agg'], $padding);
+        });
+
+        $astNode = $this->kpiParser->parse($kpi);
+        $valsByDate = $this->astEvaluator->evaluate($astNode);
+
+        // TODO: Aggregate to specified resolution here
+
+        return $valsByDate;
     }
 
     /**
