@@ -2,28 +2,27 @@
 
 use \Mongotd\KpiParser;
 use \Mongotd\AstEvaluator;
-use \Mongotd\NodeUnaryOperator;
-use \Mongotd\NodeBinaryOperator;
-use \Mongotd\NodeNumber;
-use \Mongotd\NodeVariable;
-use \Mongotd\Operator;
 
 class KpiParserTest extends PHPUnit_Framework_TestCase{
 
     public function basicArithmeticProvider(){
-    return array(
-        array('2 + 2', 4),
-        array('2 + 2*2', 6),
-        array('8/4', 2),
-        array('-1', -1),
-        array('+1', 1),
-        array('-2*2', -4),
-        array('8*-5', -40),
-        array('5*(5+5)', 50),
-        array('5*(5/5+5/5)', 10),
-        array('5.5+5.5', 11),
-    );
-}
+        return array(
+            array('2 + 2', 4),
+            array('2 + 2*2', 6),
+            array('8/4', 2),
+            array('-1', -1),
+            array('+1', 1),
+            array('-2*2', -4),
+            array('8*-5', -40),
+            array('5*(5+5)', 50),
+            array('5*(5/5+5/5)', 10),
+            array('5.5+5.5', 11),
+            array('-(5 - 10)', 5),
+            array('1*1*1*1/1*1*1*1*1*(1*1*1)*1*1*1*(1*1*1*1)', 1),
+            array('2*2/2*2', 1),
+            array('---5', -5)
+        );
+    }
 
     /**
      * @dataProvider basicArithmeticProvider
@@ -43,27 +42,69 @@ class KpiParserTest extends PHPUnit_Framework_TestCase{
 
     public function variableArithmeticProvider(){
         return array(
-            array('5 + [nid=5,sid=2,agg=sum]', 10),
-            array('5 + [nid=5,sid=2,agg=sum]*5', 30)
+            array('5 + [nid=5,sid=2,agg=sum,val=5]', 10),
+            array('5 + [nid=5,sid=2,agg=sum,val=5]*5', 30),
+            array('5 + [val=5]*[val=10]', 55),
+            array('5 + [val=1]+[val=2]*([val=5]+[val=10])', 36),
+            array('-[val=1]', -1),
+            array('100 * [val=50]/[val=100]', 50),
         );
     }
 
     /**
      * @dataProvider variableArithmeticProvider
      *
-     * @param $expression
-     * @param $expectedResult
+     * @param $expression     string
+     * @param $expectedResult number
      */
     public function test_variableArithmetic_EvaluateAst_MatchExpected($expression, $expectedResult){
         $parser = new KpiParser();
         $evaluator = new AstEvaluator();
         $evaluator->setVariableEvaluatorCallback(function($options){
-            return 5;
+            return $options['val'];
         });
 
         $node = $parser->parse($expression);
         $result = $evaluator->evaluate($node);
 
         $this->assertEquals($expectedResult, $result, $expression . ' was equal to ' . $result);
+    }
+
+    public function syntaxErrorArithmeticProvider(){
+        return array(
+            array('5 +/ 5', 'Mangled operators'),
+            array('5 * (5+5', 'Unbalanced parentheses1'),
+            array('5 * 5+5)', 'Unbalanced parentheses2'),
+            array('5 * (5+5))', 'Unbalanced parentheses3'),
+            array('[val=5', 'Unbalanced brackets1'),
+            array('val=5]', 'Unbalanced brackets2'),
+            array('[blarg]', 'Variable with no assignment'),
+            array('[]', 'Empty variable'),
+            array('{2blarg=5]', 'Variable with identifier beginning with a number'),
+            array('0,5', 'Float using comma instead of dot'),
+            array('[val=hello hello]', 'Variable with value containing a space'),
+        );
+    }
+
+    /**
+     * @dataProvider syntaxErrorArithmeticProvider
+     *
+     * @param $expression string
+     * @param $description string
+     */
+    public function test_syntaxErrorArithmetic_EvaluateAst_ThrowsException($expression, $description){
+        $parser = new KpiParser();
+        $evaluator = new AstEvaluator();
+        $evaluator->setVariableEvaluatorCallback(function($options){
+            return $options['val'];
+        });
+
+        try{
+            $parser->parse($expression);
+        }catch(\Exception $e){
+            return;
+        }
+
+        $this->fail('Expected exception, but parsing succeeded for test: ' . $description);
     }
 }
