@@ -47,4 +47,8 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
         $this->assertEquals(2, count($res[1]['anomalies']), 'Expected number of anomalies in grp3 were wrong');
         $this->assertEquals(1, count($res[2]['anomalies']), 'Expected number of anomalies in grp2 were wrong');
     }
+
+    public function test_StoreValues_RetrieveAsFormula_FormulaIsCorrectlyCalculated(){
+        // TODO
+    }
 }

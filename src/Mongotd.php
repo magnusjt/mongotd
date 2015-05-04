@@ -32,7 +32,9 @@ class Mongotd{
      * @return Retriever
      */
     public function getRetriever(){
-        return new Retriever($this->conn, $this->logger);
+        $kpiParser = new KpiParser();
+        $astEvaluator = new AstEvaluator();
+        return new Retriever($this->conn, $this->logger, $kpiParser, $astEvaluator);
     }
 
     /**
