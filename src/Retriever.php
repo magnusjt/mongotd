@@ -199,6 +199,7 @@ class Retriever{
         $formulaResolution = Resolution::FIVE_MINUTES,
         $padding = false
     ){
+        $this->astEvaluator->setPaddingValue($padding);
         $this->astEvaluator->setVariableEvaluatorCallback(function($options) use($nid, $start, $end, $formulaResolution, $padding){
             if(!isset($options['sid'])){
                 throw new \Exception('sid was not specified in variable. Need this to determine which sensor to get for the calculation of the formula.');
