@@ -6,7 +6,6 @@ use \DatePeriod;
 use \DateInterval;
 use \DateTimeZone;
 use \MongoDate;
-use \MongoCursor;
 
 class Retriever{
     /** @var  Connection */
@@ -28,25 +27,64 @@ class Retriever{
         $this->astEvaluator = $astEvaluator;
     }
 
+    /**
+     * This function allows you to retrieve dataseries based on a formula, and a set of node ids.
+     *
+     * Steps to do the aggregations:
+     * 1. The formula is calculated for each node. The formula is calculated at a certain resolution.
+     *    The result of the formula is then aggregated further up to another resolution.
+     * 2. Aggregation is performed over the node ids
+     * 3. The final aggregation is done up to the desired end resolution.
+     *
+     *
+     * @param $formula              string    KPI formula
+     * @param $nids                 string[]  Node ids to aggregate
+     * @param $start                DateTime
+     * @param $end                  DateTime
+     * @param $resultResolution     int       Resolution of the end result
+     * @param $resultAggregation    int       Aggregation up to the end result
+     * @param $formulaResolution    int       Resolution at which the formula is calculated
+     * @param $formulaAggregation   int       Aggregation of the formula result
+     * @param $nodeResolution       int       Resolution at which the nodes are aggregated
+     * @param $nodeAggregation      int       Aggregation of the nodes
+     * @param $padding              mixed     Padding value for missing data
+     *
+     *
+     * @return array
+     * @throws \Exception
+     */
     public function getAdvanced(
         $formula,
         array $nids,
         DateTime $start,
         DateTime $end,
-        $resolution = Resolution::FIVE_MINUTES,
-        $aggregation = Aggregation::SUM,
+        $resultResolution = Resolution::FIVE_MINUTES,
+        $resultAggregation = Aggregation::SUM,
         $formulaResolution = Resolution::FIVE_MINUTES,
+        $formulaAggregation = Aggregation::SUM,
         $nodeResolution = Resolution::FIVE_MINUTES,
         $nodeAggregation = Aggregation::SUM,
         $padding
-    )
-    {
-        // TODO: Create function that can aggregate in all the dimensions
+    ){
+        if($resultResolution < $nodeResolution){
+            throw new \Exception('End result resolution must be equal or higher than the node resolution');
+        }
+        if($nodeResolution < $formulaResolution){
+            throw new \Exception('Node resolution must be equal or higher than the formula resolution');
+        }
+
+        $series = array();
+        foreach($nids as $nid){
+            $series[] = $this->getFormula($formula, $nid, $start, $end, $nodeResolution, $formulaResolution, $formulaAggregation, $padding);
+        }
+
+        $valsByDate = $this->aggregateAcross($series, $nodeAggregation);
+        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution);
     }
 
     /**
-     * @param $sid         int|string
-     * @param $nid         int|string
+     * @param $sid         string
+     * @param $nid         string
      * @param $start       \DateTime
      * @param $end         \DateTime
      * @param $resolution  int
@@ -94,8 +132,8 @@ class Retriever{
         }
 
         $match = array(
-            'sid' => $sid,
-            'nid' => $nid,
+            'sid' => (string)$sid,
+            'nid' => (string)$nid,
             'mongodate' => array(
                 '$gte' => new MongoDate($start->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()),
                 '$lte' => new MongoDate($end->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp())
@@ -119,7 +157,7 @@ class Retriever{
             }
         }
 
-        $valsByDate = $this->aggregate($valsByDate, $aggregation, $resolution);
+        $valsByDate = $this->aggregateTime($valsByDate, $aggregation, $resolution);
 
         // Fill in the actual values in the template array
         foreach($valsByDate as $dateStr => $val){
@@ -132,30 +170,95 @@ class Retriever{
     }
 
     /**
-     * @param $formula           string      KPI syntax is regular arithmetic. Variables: [sid=1,agg=Sum]
-     * @param $nid               string|int
+     * This function finds a data series based on a formula. In order to do this,
+     * a separate resolution needs to be specified at which the formula will be calculated.
+     * Every variable used in the formula will be aggregated to this resolution before calculating.
+     * The aggregation used in this case must be specified within the variables.
+     *
+     * After the calculation is done, the data series is further aggregated to the desired result resolution.
+     *
+     * @param $formula           string      KPI syntax is regular arithmetic. Variables: [sid=1,agg=1]
+     * @param $nid               string
      * @param $start             DateTime
      * @param $end               DateTime
-     * @param $resolution        int
+     * @param $resultResolution  int
      * @param $formulaResolution int
-     * @param $aggregation       int
+     * @param $resultAggregation int
      * @param $padding           bool
      *
      * @return array
      * @throws \Exception
      */
-    public function getFormula($formula, $nid, DateTime $start, DateTime $end, $resolution = Resolution::FIFTEEEN_MINUTES, $formulaResolution = Resolution::FIVE_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
+    public function getFormula(
+        $formula,
+        $nid,
+        DateTime $start,
+        DateTime $end,
+        $resultResolution = Resolution::FIVE_MINUTES,
+        $resultAggregation = Aggregation::SUM,
+        $formulaResolution = Resolution::FIVE_MINUTES,
+        $padding = false
+    ){
         $this->astEvaluator->setVariableEvaluatorCallback(function($options) use($nid, $start, $end, $formulaResolution, $padding){
+            if(!isset($options['sid'])){
+                throw new \Exception('sid was not specified in variable. Need this to determine which sensor to get for the calculation of the formula.');
+            }
+            if(!isset($options['agg'])){
+                throw new \Exception('agg was not specified in variable. Need this in order to aggregate up to the correct resolution before calculating formula.');
+            }
+
             return $this->get($options['sid'], $nid, $start, $end, $formulaResolution, $options['agg'], $padding);
         });
 
         $astNode = $this->kpiParser->parse($formula);
         $valsByDate = $this->astEvaluator->evaluate($astNode);
 
-        return $this->aggregate($valsByDate, $aggregation, $resolution);
+        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution);
     }
 
     /**
+     * This function takes an array of valsByDate arrays (dateStr => value),
+     * and merges them into one, using the specified aggregation method.
+     *
+     * It assumes that the dateStr keys are equal for all the arrays
+     *
+     * @param $series      array    Array of valsByDate
+     * @param $aggregation int
+     *
+     * @return array
+     */
+    public function aggregateAcross($series, $aggregation){
+        $n = count($series);
+        if($n == 0){
+            return array();
+        }
+
+        $valsByDate = $series[0];
+        for($i = 1; $i < $n; $i++){
+            foreach($series[$i] as $dateStr => $value){
+                if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
+                    $valsByDate[$dateStr] += $value;
+                }else if($aggregation == Aggregation::MAX){
+                    $valsByDate[$dateStr] = max($valsByDate[$dateStr], $value);
+                }else if($aggregation == Aggregation::MIN){
+                    $valsByDate[$dateStr] = min($valsByDate[$dateStr], $value);
+                }
+            }
+        }
+
+        if($aggregation == Aggregation::AVG){
+            foreach($valsByDate as $dateStr => $value){
+                $valsByDate[$dateStr] /= $n;
+            }
+        }
+
+        return $valsByDate;
+    }
+
+    /**
+     * This function takes a valsByDate (dateStr => value) array
+     * and aggregates up to a more coarse resolution
+     *
      * @param $valsByDateIn array
      * @param $aggregation  int
      * @param $resolution   int
@@ -163,9 +266,9 @@ class Retriever{
      * @return array
      * @throws \Exception
      */
-    private function aggregate($valsByDateIn, $aggregation, $resolution){
+    public function aggregateTime(array $valsByDateIn, $aggregation, $resolution){
         // Depending on the resolution, the values will be clamped
-        // to different datetimes. Determine that here.
+        // to different datetimes.
         if($resolution == Resolution::MINUTE){
             $clampFunction = '\Mongotd\DateTimeHelper::clampToMinute';
         }else if($resolution == Resolution::FIVE_MINUTES){
@@ -189,9 +292,7 @@ class Retriever{
             $dateStr = call_user_func($clampFunction, $datetime)->format('Y-m-d H:i:s');
 
             if(isset($valsByDate[$dateStr])){
-                if($aggregation == Aggregation::SUM){
-                    $valsByDate[$dateStr] += $value;
-                }else if($aggregation == Aggregation::AVG){
+                if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
                     $valsByDate[$dateStr] += $value;
                 }else if($aggregation == Aggregation::MAX){
                     $valsByDate[$dateStr] = max($valsByDate[$dateStr], $value);
@@ -226,6 +327,14 @@ class Retriever{
      * @return Anomaly[]
      */
     public function getAnomalies(DateTime $datetimeFrom, DateTime $datetimeTo, array $nids = array(), array $sids = array(), $minCount = 1, $limit = 20){
+        foreach($nids as &$nid){
+            $nid = (string)$nid;
+        }
+
+        foreach($sids as &$sid){
+            $sid = (string)$sid;
+        }
+
         // First match with datetime and nid/sid we are interested in
         $matchInitial = array();
         if(count($nids) > 0){
