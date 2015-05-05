@@ -45,7 +45,7 @@ class GaugeInserter{
 
             $secondsClampedToInterval = $secondsIntoThisDay - $secondsIntoThisDay%$this->intervalInSeconds;
             $batchUpdate->add(array(
-                'q' => array('sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate),
+                'q' => array('sid' => (string)$cv->sid, 'nid' => (string)$cv->nid, 'mongodate' => $mongodate),
                 'u' => array('$set' => array('vals.' . $secondsClampedToInterval => $cv->value))
             ));
         }
@@ -55,8 +55,8 @@ class GaugeInserter{
 
     /**
      * @param $col \MongoCollection
-     * @param $sid int
-     * @param $nid int
+     * @param $sid string
+     * @param $nid string
      * @param $mongodate MongoDate
      *
      * Preallocate a days worth of data. Only done once a day, so shouldn't be too taxing.
@@ -70,8 +70,8 @@ class GaugeInserter{
             }
 
             $col->insert(array(
-                             'sid'       => $sid,
-                             'nid'       => $nid,
+                             'sid'       => (string)$sid,
+                             'nid'       => (string)$nid,
                              'mongodate' => $mongodate,
                              'vals'      => $valsPerSec,
                          ));

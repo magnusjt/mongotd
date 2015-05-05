@@ -24,8 +24,8 @@ abstract class AnomalyScanner{
      */
     protected function storeAnomaly(Anomaly $anomaly){
         $this->conn->col('anomalies')->insert(array(
-            'nid' => $anomaly->cv->nid,
-            'sid' => $anomaly->cv->sid,
+            'nid' => (string)$anomaly->cv->nid,
+            'sid' => (string)$anomaly->cv->sid,
             'predicted' => $anomaly->predicted,
             'actual' => $anomaly->cv->value,
             'mongodate' => new MongoDate($anomaly->cv->datetime->getTimestamp())
@@ -33,8 +33,8 @@ abstract class AnomalyScanner{
     }
 
     /**
-     * @param $nid                   int
-     * @param $sid                   int
+     * @param $nid                   string
+     * @param $sid                   string
      * @param $datetimeEnd           DateTime
      * @param $nDays                 int
      * @param $windowLengthInSeconds int
@@ -59,8 +59,8 @@ abstract class AnomalyScanner{
 
         $cursor = $this->conn->col('cv')->find(array(
            'mongodate' => array('$gte' => $mongodateStart, '$lte' => $mongodateEnd),
-           'nid' => $nid,
-           'sid' => $sid,
+           'nid' => (string)$nid,
+           'sid' => (string)$sid,
            'vals' => array('$ne' => null)
         ), array('vals' => 1, 'mongodate' => 1));
 

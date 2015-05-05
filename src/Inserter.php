@@ -42,8 +42,8 @@ class Inserter{
     }
 
     /**
-     * @param $sid           int|string
-     * @param $nid           int|string
+     * @param $sid           string
+     * @param $nid           string
      * @param $datetime      DateTime
      * @param $value         number
      * @param $isIncremental bool

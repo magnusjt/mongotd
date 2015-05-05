@@ -88,8 +88,8 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
             }else{
                 $created = $cv->datetime;
                 $col->insert(array(
-                                 'sid'       => $cache->sid,
-                                 'nid'       => $cache->nid,
+                                 'sid'       => (string)$cache->sid,
+                                 'nid'       => (string)$cache->nid,
                                  'created'   => new MongoDate($created->getTimestamp()),
                                  'level'     => $cache->level,
                                  'trend'     => $cache->trend,
@@ -106,7 +106,7 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
             }
 
             $batchUpdate->add(array(
-                'q' => array('sid' => $cv->sid, 'nid' => $cv->nid),
+                'q' => array('sid' => (string)$cv->sid, 'nid' => (string)$cv->nid),
                 'u' => array('$set' => array(
                     'level'                           => $cache->level,
                     'trend'                           => $cache->trend,

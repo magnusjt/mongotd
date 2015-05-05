@@ -37,7 +37,7 @@ class DeltaConverter{
             $timestamp = $cv->datetime->getTimestamp();
             $mongodate = new \MongoDate($timestamp);
 
-            $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid), array('mongodate' => 1, 'value' => 1));
+            $doc = $col->findOne(array('sid' => (string)$cv->sid, 'nid' => (string)$cv->nid), array('mongodate' => 1, 'value' => 1));
             if($doc){
                 $delta = $this->getDeltaValue($cv->value, $doc['value'], $timestamp, $doc['mongodate']->sec);
                 if($delta !== false){
