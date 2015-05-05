@@ -45,7 +45,7 @@ class DeltaConverter{
                 }
             }
 
-            $col->update(array('sid' => $cv->sid, 'nid' => $cv->nid),
+            $col->update(array('sid' => (string)$cv->sid, 'nid' => (string)$cv->nid),
                          array('$set' => array('mongodate' => $mongodate, 'value' => $cv->value)),
                          array('upsert' => true));
         }
