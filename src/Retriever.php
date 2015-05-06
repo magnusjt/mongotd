@@ -320,10 +320,13 @@ class Retriever{
                 }
             }else{
                 $valsByDate[$dateStr] = $value;
-                $countsByDate[$dateStr] = 0;
             }
 
-            $countsByDate[$dateStr]++;
+            if(isset($countsByDate[$dateStr])){
+                $countsByDate[$dateStr]++;
+            }else{
+                $countsByDate[$dateStr] = 0;
+            }
         }
 
         if($aggregation == Aggregation::AVG){
