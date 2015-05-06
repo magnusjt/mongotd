@@ -243,6 +243,7 @@ class Retriever{
         for($i = 1; $i < $n; $i++){
             foreach($series[$i] as $dateStr => $value){
                 if($valsByDate[$dateStr] === $padding or $value === $padding){
+                    $valsByDate[$dateStr] = $padding;
                     continue;
                 }
 
@@ -258,7 +259,9 @@ class Retriever{
 
         if($aggregation == Aggregation::AVG){
             foreach($valsByDate as $dateStr => $value){
-                $valsByDate[$dateStr] /= $n;
+                if($value !== $padding){
+                    $valsByDate[$dateStr] /= $n;
+                }
             }
         }
 
@@ -297,14 +300,15 @@ class Retriever{
         $valsByDate = array();
         $countsByDate = array();
         foreach($valsByDateIn as $dateStr => $value){
-            if($value === $padding){
-                continue;
-            }
-
             $datetime = new DateTime($dateStr);
 
             // Clamp the datetime so it is unique for the current resolution
             $dateStr = call_user_func($clampFunction, $datetime)->format('Y-m-d H:i:s');
+
+            if($value === $padding){
+                $valsByDate[$dateStr] = $padding;
+                continue;
+            }
 
             if(isset($valsByDate[$dateStr])){
                 if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
@@ -324,7 +328,9 @@ class Retriever{
 
         if($aggregation == Aggregation::AVG){
             foreach($valsByDate as $dateStr => $value){
-                $valsByDate[$dateStr] /= $countsByDate[$dateStr];
+                if($value !== $padding){
+                    $valsByDate[$dateStr] /= $countsByDate[$dateStr];
+                }
             }
         }
 
