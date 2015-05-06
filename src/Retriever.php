@@ -325,7 +325,7 @@ class Retriever{
             if(isset($countsByDate[$dateStr])){
                 $countsByDate[$dateStr]++;
             }else{
-                $countsByDate[$dateStr] = 0;
+                $countsByDate[$dateStr] = 1;
             }
         }
 
