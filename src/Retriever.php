@@ -199,6 +199,10 @@ class Retriever{
         $formulaResolution = Resolution::FIVE_MINUTES,
         $padding = false
     ){
+        if($resultResolution < $formulaResolution){
+            throw new \Exception('End result resolution must be equal or higher than the formula resolution');
+        }
+
         $this->astEvaluator->setPaddingValue($padding);
         $this->astEvaluator->setVariableEvaluatorCallback(function($options) use($nid, $start, $end, $formulaResolution, $padding){
             if(!isset($options['sid'])){
