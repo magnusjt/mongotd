@@ -64,7 +64,7 @@ class Retriever{
         $formulaAggregation = Aggregation::SUM,
         $nodeResolution = Resolution::FIVE_MINUTES,
         $nodeAggregation = Aggregation::SUM,
-        $padding
+        $padding = false
     ){
         if($resultResolution < $nodeResolution){
             throw new \Exception('End result resolution must be equal or higher than the node resolution');
@@ -78,8 +78,8 @@ class Retriever{
             $series[] = $this->getFormula($formula, $nid, $start, $end, $nodeResolution, $formulaResolution, $formulaAggregation, $padding);
         }
 
-        $valsByDate = $this->aggregateAcross($series, $nodeAggregation);
-        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution);
+        $valsByDate = $this->aggregateAcross($series, $nodeAggregation, $padding);
+        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
     }
 
     /**
@@ -157,7 +157,7 @@ class Retriever{
             }
         }
 
-        $valsByDate = $this->aggregateTime($valsByDate, $aggregation, $resolution);
+        $valsByDate = $this->aggregateTime($valsByDate, $aggregation, $resolution, $padding);
 
         // Fill in the actual values in the template array
         foreach($valsByDate as $dateStr => $val){
@@ -218,7 +218,7 @@ class Retriever{
         $astNode = $this->kpiParser->parse($formula);
         $valsByDate = $this->astEvaluator->evaluate($astNode);
 
-        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution);
+        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
     }
 
     /**
@@ -229,10 +229,11 @@ class Retriever{
      *
      * @param $series      array    Array of valsByDate
      * @param $aggregation int
+     * @param $padding     mixed
      *
      * @return array
      */
-    public function aggregateAcross($series, $aggregation){
+    public function aggregateAcross($series, $aggregation, $padding = false){
         $n = count($series);
         if($n == 0){
             return array();
@@ -241,6 +242,10 @@ class Retriever{
         $valsByDate = $series[0];
         for($i = 1; $i < $n; $i++){
             foreach($series[$i] as $dateStr => $value){
+                if($valsByDate[$dateStr] === $padding or $value === $padding){
+                    continue;
+                }
+
                 if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
                     $valsByDate[$dateStr] += $value;
                 }else if($aggregation == Aggregation::MAX){
@@ -267,11 +272,12 @@ class Retriever{
      * @param $valsByDateIn array
      * @param $aggregation  int
      * @param $resolution   int
+     * @param $padding      mixed
      *
      * @return array
      * @throws \Exception
      */
-    public function aggregateTime(array $valsByDateIn, $aggregation, $resolution){
+    public function aggregateTime(array $valsByDateIn, $aggregation, $resolution, $padding = false){
         // Depending on the resolution, the values will be clamped
         // to different datetimes.
         if($resolution == Resolution::MINUTE){
@@ -291,6 +297,10 @@ class Retriever{
         $valsByDate = array();
         $countsByDate = array();
         foreach($valsByDateIn as $dateStr => $value){
+            if($value === $padding){
+                continue;
+            }
+
             $datetime = new DateTime($dateStr);
 
             // Clamp the datetime so it is unique for the current resolution
