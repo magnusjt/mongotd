@@ -79,7 +79,11 @@ class Retriever{
         }
 
         $valsByDate = $this->aggregateAcross($series, $nodeAggregation, $padding);
-        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
+        $valsByDate = $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
+
+        $this->normalizeDatetimes($start, $end, $resultResolution);
+        $valsByDate = $this->padValues($valsByDate, $start, $end, $resultResolution, $padding);
+        return $valsByDate;
     }
 
     /**
@@ -95,48 +99,22 @@ class Retriever{
      * @throws \Exception
      */
     public function get($sid, $nid, $start, $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
+        $start = clone $start;
+        $end = clone $end;
         $targetTimezone = $start->getTimezone();
+        $this->normalizeDatetimes($start, $end, $resolution);
 
-        if($resolution == Resolution::MINUTE){
-            $start = DateTimeHelper::clampToMinute($start);
-            $end = DateTimeHelper::clampToMinute($end);
-            $interval = '1 minute';
-        }else if($resolution == Resolution::FIVE_MINUTES){
-            $start = DateTimeHelper::clampToFiveMin($start);
-            $end = DateTimeHelper::clampToFiveMin($end);
-            $interval = '5 minutes';
-        }else if($resolution == Resolution::FIFTEEEN_MINUTES){
-            $start = DateTimeHelper::clampToFifteenMin($start);
-            $end = DateTimeHelper::clampToFifteenMin($end);
-            $interval = '15 minutes';
-        }else if($resolution == Resolution::HOUR){
-            $start = DateTimeHelper::clampToHour($start);
-            $end = DateTimeHelper::clampToHour($end);
-            $interval = '1 hour';
-        }else if($resolution == Resolution::DAY){
-            $start = DateTimeHelper::clampToDay($start);
-            $end = DateTimeHelper::clampToDay($end);
-            $interval = '1 day';
-        }else{
-            throw new \Exception('Invalid resolution given');
-        }
-
-        $end->add(DateInterval::createFromDateString($interval));
-        $dateperiod = new DatePeriod($start, \DateInterval::createFromDateString($interval), $end);
-
-        // Create a template array with padded values
-        $valsByDatePadded = array();
-        foreach($dateperiod as $datetime){
-            $dateStr = $datetime->format('Y-m-d H:i:s');
-            $valsByDatePadded[$dateStr] = $padding;
-        }
+        $startMongo = clone $start;
+        $endMongo = clone $end;
+        $startMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
+        $endMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
 
         $match = array(
             'sid' => (string)$sid,
             'nid' => (string)$nid,
             'mongodate' => array(
-                '$gte' => new MongoDate($start->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp()),
-                '$lte' => new MongoDate($end->setTimezone(new DateTimeZone('UTC'))->setTime(0, 0, 0)->getTimestamp())
+                '$gte' => new MongoDate($startMongo->getTimestamp()),
+                '$lte' => new MongoDate($endMongo->getTimestamp())
             )
         );
 
@@ -158,15 +136,8 @@ class Retriever{
         }
 
         $valsByDate = $this->aggregateTime($valsByDate, $aggregation, $resolution, $padding);
-
-        // Fill in the actual values in the template array
-        foreach($valsByDate as $dateStr => $val){
-            if(isset($valsByDatePadded[$dateStr])){
-                $valsByDatePadded[$dateStr] = $val;
-            }
-        }
-
-        return $valsByDatePadded;
+        $valsByDate = $this->padValues($valsByDate, $start, $end, $resolution, $padding);
+        return $valsByDate;
     }
 
     /**
@@ -217,15 +188,20 @@ class Retriever{
 
         $astNode = $this->kpiParser->parse($formula);
         $valsByDate = $this->astEvaluator->evaluate($astNode);
+        $valsByDate = $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
 
-        return $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
+        $this->normalizeDatetimes($start, $end, $resultResolution);
+        $valsByDate = $this->padValues($valsByDate, $start, $end, $resultResolution, $padding);
+        return $valsByDate;
     }
 
     /**
      * This function takes an array of valsByDate arrays (dateStr => value),
      * and merges them into one, using the specified aggregation method.
      *
-     * It assumes that the dateStr keys are equal for all the arrays
+     * It assumes that the dateStr keys are equal for all the arrays.
+     *
+     * Ignores all pad values in the calculations! The result needs to be repadded.
      *
      * @param $series      array    Array of valsByDate
      * @param $aggregation int
@@ -234,34 +210,37 @@ class Retriever{
      * @return array
      */
     public function aggregateAcross($series, $aggregation, $padding = false){
-        $n = count($series);
-        if($n == 0){
-            return array();
-        }
-
-        $valsByDate = $series[0];
-        for($i = 1; $i < $n; $i++){
+        $valsByDate = array();
+        $countsByDate = array();
+        for($i = 0; $i < count($series); $i++){
             foreach($series[$i] as $dateStr => $value){
-                if($valsByDate[$dateStr] === $padding or $value === $padding){
-                    $valsByDate[$dateStr] = $padding;
+                if($value === $padding){
                     continue;
                 }
 
-                if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
-                    $valsByDate[$dateStr] += $value;
-                }else if($aggregation == Aggregation::MAX){
-                    $valsByDate[$dateStr] = max($valsByDate[$dateStr], $value);
-                }else if($aggregation == Aggregation::MIN){
-                    $valsByDate[$dateStr] = min($valsByDate[$dateStr], $value);
+                if(isset($valsByDate[$dateStr])){
+                    if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
+                        $valsByDate[$dateStr] += $value;
+                    }else if($aggregation == Aggregation::MAX){
+                        $valsByDate[$dateStr] = max($valsByDate[$dateStr], $value);
+                    }else if($aggregation == Aggregation::MIN){
+                        $valsByDate[$dateStr] = min($valsByDate[$dateStr], $value);
+                    }
+                }else{
+                    $valsByDate[$dateStr] = $value;
+                }
+
+                if(isset($countsByDate[$dateStr])){
+                    $countsByDate[$dateStr]++;
+                }else{
+                    $countsByDate[$dateStr] = 1;
                 }
             }
         }
 
         if($aggregation == Aggregation::AVG){
             foreach($valsByDate as $dateStr => $value){
-                if($value !== $padding){
-                    $valsByDate[$dateStr] /= $n;
-                }
+                $valsByDate[$dateStr] /= $countsByDate[$dateStr];
             }
         }
 
@@ -271,6 +250,8 @@ class Retriever{
     /**
      * This function takes a valsByDate (dateStr => value) array
      * and aggregates up to a more coarse resolution
+     *
+     * Ignores all pad values in the calculations! The result needs to be repadded.
      *
      * @param $valsByDateIn array
      * @param $aggregation  int
@@ -300,15 +281,14 @@ class Retriever{
         $valsByDate = array();
         $countsByDate = array();
         foreach($valsByDateIn as $dateStr => $value){
+            if($value === $padding){
+                continue;
+            }
+
             $datetime = new DateTime($dateStr);
 
             // Clamp the datetime so it is unique for the current resolution
             $dateStr = call_user_func($clampFunction, $datetime)->format('Y-m-d H:i:s');
-
-            if($value === $padding){
-                $valsByDate[$dateStr] = $padding;
-                continue;
-            }
 
             if(isset($valsByDate[$dateStr])){
                 if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
@@ -331,13 +311,95 @@ class Retriever{
 
         if($aggregation == Aggregation::AVG){
             foreach($valsByDate as $dateStr => $value){
-                if($value !== $padding){
-                    $valsByDate[$dateStr] /= $countsByDate[$dateStr];
-                }
+                $valsByDate[$dateStr] /= $countsByDate[$dateStr];
             }
         }
 
         return $valsByDate;
+    }
+
+    /**
+     * @param $valsByDate array
+     * @param $start      DateTime
+     * @param $end        DateTime
+     * @param $resolution int
+     * @param $padding    mixed
+     *
+     * Makes sure that there are values for every datetime in the period with the given resolution.
+     * Adds the padding value if there is missing data
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function padValues($valsByDate, $start, $end, $resolution, $padding){
+        if($resolution == Resolution::MINUTE){
+            $interval = '1 minute';
+        }else if($resolution == Resolution::FIVE_MINUTES){
+            $interval = '5 minutes';
+        }else if($resolution == Resolution::FIFTEEEN_MINUTES){
+            $interval = '15 minutes';
+        }else if($resolution == Resolution::HOUR){
+            $interval = '1 hour';
+        }else if($resolution == Resolution::DAY){
+             $interval = '1 day';
+        }else{
+            throw new \Exception('Invalid resolution given');
+        }
+
+        $dateperiod = new DatePeriod($start, \DateInterval::createFromDateString($interval), $end);
+
+        // Create a template array with padded values
+        $valsByDatePadded = array();
+        foreach($dateperiod as $datetime){
+            $dateStr = $datetime->format('Y-m-d H:i:s');
+            $valsByDatePadded[$dateStr] = $padding;
+        }
+
+        // Fill in the actual values in the template array
+        foreach($valsByDate as $dateStr => $val){
+            if(isset($valsByDatePadded[$dateStr])){
+                $valsByDatePadded[$dateStr] = $val;
+            }
+        }
+
+        return $valsByDatePadded;
+    }
+
+    /**
+     * @param $start      DateTime
+     * @param $end        DateTime
+     * @param $resolution int
+     *
+     * Clamps the datetimes down to the nearest resolution step.
+     * Also move the end datetime to the next step, so that
+     * the entire step is included in the result.
+     *
+     * @throws \Exception
+     */
+    private function normalizeDatetimes(&$start, &$end, $resolution){
+        if($resolution == Resolution::MINUTE){
+            $start = DateTimeHelper::clampToMinute($start);
+            $end = DateTimeHelper::clampToMinute($end);
+            $end->add(DateInterval::createFromDateString('1 minute'));
+        }else if($resolution == Resolution::FIVE_MINUTES){
+            $start = DateTimeHelper::clampToFiveMin($start);
+            $end = DateTimeHelper::clampToFiveMin($end);
+            $end->add(DateInterval::createFromDateString('5 minutes'));
+        }else if($resolution == Resolution::FIFTEEEN_MINUTES){
+            $start = DateTimeHelper::clampToFifteenMin($start);
+            $end = DateTimeHelper::clampToFifteenMin($end);
+            $end->add(DateInterval::createFromDateString('15 minutes'));
+        }else if($resolution == Resolution::HOUR){
+            $start = DateTimeHelper::clampToHour($start);
+            $end = DateTimeHelper::clampToHour($end);
+            $end->add(DateInterval::createFromDateString('1 hour'));
+        }else if($resolution == Resolution::DAY){
+            $start = DateTimeHelper::clampToDay($start);
+            $end = DateTimeHelper::clampToDay($end);
+            $end->add(DateInterval::createFromDateString('1 day'));
+        }else{
+            throw new \Exception('Invalid resolution given');
+        }
     }
 
     /**
