@@ -73,6 +73,10 @@ class Retriever{
             throw new \Exception('Node resolution must be equal or higher than the formula resolution');
         }
 
+        $start = clone $start;
+        $end = clone $end;
+        $this->normalizeDatetimes($start, $end, $resultResolution);
+
         $series = array();
         foreach($nids as $nid){
             $series[] = $this->getFormula($formula, $nid, $start, $end, $nodeResolution, $formulaResolution, $formulaAggregation, $padding);
@@ -80,8 +84,6 @@ class Retriever{
 
         $valsByDate = $this->aggregateAcross($series, $nodeAggregation, $padding);
         $valsByDate = $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
-
-        $this->normalizeDatetimes($start, $end, $resultResolution);
         $valsByDate = $this->padValues($valsByDate, $start, $end, $resultResolution, $padding);
         return $valsByDate;
     }
@@ -101,8 +103,9 @@ class Retriever{
     public function get($sid, $nid, $start, $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
         $start = clone $start;
         $end = clone $end;
-        $targetTimezone = $start->getTimezone();
         $this->normalizeDatetimes($start, $end, $resolution);
+
+        $targetTimezone = $start->getTimezone();
 
         $startMongo = clone $start;
         $endMongo = clone $end;
@@ -174,6 +177,10 @@ class Retriever{
             throw new \Exception('End result resolution must be equal or higher than the formula resolution');
         }
 
+        $start = clone $start;
+        $end = clone $end;
+        $this->normalizeDatetimes($start, $end, $resultResolution);
+
         $this->astEvaluator->setPaddingValue($padding);
         $this->astEvaluator->setVariableEvaluatorCallback(function($options) use($nid, $start, $end, $formulaResolution, $padding){
             if(!isset($options['sid'])){
@@ -189,8 +196,6 @@ class Retriever{
         $astNode = $this->kpiParser->parse($formula);
         $valsByDate = $this->astEvaluator->evaluate($astNode);
         $valsByDate = $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
-
-        $this->normalizeDatetimes($start, $end, $resultResolution);
         $valsByDate = $this->padValues($valsByDate, $start, $end, $resultResolution, $padding);
         return $valsByDate;
     }
