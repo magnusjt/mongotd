@@ -110,7 +110,11 @@ class OperatorEvaluator{
             if($value === $padding or $right[$key] === $padding){
                 $left[$key] = $padding;
             }else{
-                $left[$key] /= $right[$key];
+                if($right[$key] == 0){
+                    $left[$key] = $padding;
+                }else{
+                    $left[$key] /= $right[$key];
+                }
             }
         }
 
