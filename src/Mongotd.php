@@ -63,7 +63,7 @@ class Mongotd{
      */
     public function ensureIndexes(){
         $this->conn->col('cv_prev')->ensureIndex(array('sid' => 1, 'nid' => 1),                     array('unique' => true));
-        $this->conn->col('cv')->ensureIndex(array('mongodate' => 1, 'sid' => 1, 'nid' => 1),        array('unique' => true));
+        $this->conn->col('cv')->ensureIndex(array('sid' => 1, 'nid' => 1, 'mongodate' => 1),        array('unique' => true));
         $this->conn->col('anomalies')->ensureIndex(array('mongodate' => 1, 'sid' => 1, 'nid' => 1), array('unique' => true));
         $this->conn->col('hwcache')->ensureIndex(array('sid' => 1, 'nid' => 1),                     array('unique' => true));
 
