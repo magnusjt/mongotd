@@ -53,6 +53,14 @@ class Inserter{
             throw new InvalidArgumentException('Value should be numeric');
         }
 
+        if(is_string($value)){
+            if(ctype_digit($value)){
+                $value = (int)$value;
+            }else{
+                $value = (float)$value;
+            }
+        }
+
         $cv = new CounterValue($sid, $nid, clone $datetime, $value);
 
         if($isIncremental){
