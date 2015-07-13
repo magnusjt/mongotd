@@ -1,9 +1,23 @@
 mongotd
 =======
 
-Timeseries database for mongodb and PHP
+A PHP implementation of a timeseries database with mongodb.
+It takes care of storing the timeseries as well as doing
+anomaly detection on them using different techniques (currently with either 3-sigma, or Holt-winters).
 
-Currently in alpha stage
+The time series are stored using a sid (a sensor ID, i.e. what does the data represent)
+and a nid (a node ID, i.e. where the data is collected from).
+Together these IDs uniquely represent a timeseries. The time series may of type gauge, or incremental.
+In the latter case, contiguous values are subtracted from each other in order to get the rate of change.
+
+In order to be efficient with storage, the data is stored in one-day chunks,
+using a hash with the key being the number of seconds since midnight. This avoids
+storing metadata for each and every data point. For now, the smallest time step available is 1 minute.
+
+On retrieval of the data, aggregation can be performed both in time (sum/avg/max/min over an hour, day, etc.),
+space (sum/avg/max/min over certain nodes), or by a given formula. Do note, however, that pre-aggregation/caching
+is not done. This is to avoid the timezone problem (a certain day may contain different hours, depending on which time
+zone the data is viewed from).
 
 ### Basic usage
 
@@ -11,10 +25,10 @@ First we grab a mongodb connection and initialize mongotd.
 ````php
 $host       = 'localhost';
 $db_name    = 'mongotd';
-$col_prefix = 'mongotd';
+$col_prefix = 'mongotd'; // All collections used by mongotd will have this prefix and an underscore
 
 $conn    = new \Mongotd\Connection($host, $db_name, $col_prefix);
-$mongotd = new \Mongotd\Mongotd($conn, null);
+$mongotd = new \Mongotd\Mongotd($conn);
 ````
 
 To insert timeseries data, we get the inserter from mongotd. We specify
@@ -22,15 +36,16 @@ the resolution to use. Any datetimes used later on will be rounded to
 this resolution, and space will be allocated accordingly. The maximum
 resolution is 1 hour, at which point only one data point is stored every hour.
 
-Inserting data is done in batches. Add counter values
-with sensor id (sid), node id (nid), datetime, value,
-and a bool true if the counter is always increasing.
+Add the values, specifying sensor id (sid), node id (nid), datetime, value,
+and a bool true if the counter is of type incremental (always increasing).
 
 When all counter values are added, run the insert function.
 The values are then batch inserted into mongodb.
 ````php
-$insert_resolution = \Mongotd\Resolution::FIVE_MINUTES;
 $inserter = $mongotd->getInserter($insert_resolution);
+
+$insertInterval = \Mongotd\Resolution::FIVE_MINUTES;
+$inserter->setInterval($insertInterval);
 
 $datetime = new \DateTime('now');
 $node_id = 1;
@@ -57,7 +72,10 @@ optional padding value which will be used if no data is found for a given dateti
 The result set is given as an associative array with the datetime string as the key.
 ````php
 $retriever = $mongotd->getRetriever();
-$values_by_date = $retriever->get($sensor_id, $node_id, new DateTime('-1 day'), new DateTime('now'), \Mongotd\Resolution::DAY, \Mongotd\Aggregation::SUM);
+$from = new \DateTime('-1 day');
+$to = new \DateTime('now');
+$padding = 'x'; // If a value is missing at a certain step, this will be returned in its place
+$values_by_date = $retriever->get($sensor_id, $node_id, $from, $to, \Mongotd\Resolution::DAY, \Mongotd\Aggregation::SUM, $padding);
 
 foreach($values_by_date as $date_str => $value){
     // Graph the values
@@ -65,24 +83,31 @@ foreach($values_by_date as $date_str => $value){
 ````
 
 Using the retriever, we can also get a list of the current
-sensors which register as abnormal. Threshold is the number
-of abnormal values in a row which must be present in order
-for the sensor to register as abnormal.
+sensors which register as abnormal (this is calculated at the time of insertion).
 
-The detection is implemented using the holt-winters algorithm.
+
 ````php
-$threshold = 3;
-$abnormals = $retriever->getCurrentAbnormal($threshold);
-foreach($abnormals as $abnormal){
-    echo 'Abnormal value found: ' .
-            'Sensor ID: ' . $abnormal['sid'] .
-            ', Node ID: ' . $abnormal['nid'] .
-            ', Actual value: ' .
-            $abnormal['val'] .
-            ', Predicted value: ' .
-            $abnormal['pred'] .
-            "\n";
-}
+$from = new \DateTime('-1 day');
+$to = new \DateTime('now');
+$nids = array(); // Limit results to these nids, no limit if empty
+$sids = array(); // Limit results to these sids, no limit if empty
+$minNumberOfAnomalies = 1;
+$maxResults = 20;
+$results = $retriever->getAnomalies($from, $to, $nids, $sids, $minNumberOfAnomalies, $maxResults){
+
+/*
+$results is now an array of the following form:
+
+$result[] = array(
+    'nid' => $nid,
+    'sid' => $sid,
+    'count' => $count,
+    'anomalies' => $anomalies
+);
+
+Where $anomalies is an array of objects of the class \Mongotd\Anomaly
+$count is just the length of the $anomalies array
+*/
 ````
 
 ### Using vagrant setup
