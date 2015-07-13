@@ -19,7 +19,7 @@ space (sum/avg/max/min over certain nodes), or by a given formula. Do note, howe
 is not done. This is to avoid the timezone problem (a certain day may contain different hours, depending on which time
 zone the data is viewed from).
 
-### Basic usage
+## Basic usage
 
 First we grab a mongodb connection and initialize mongotd.
 ````php
@@ -31,6 +31,8 @@ $conn    = new \Mongotd\Connection($host, $db_name, $col_prefix);
 $mongotd = new \Mongotd\Mongotd($conn);
 ````
 
+### Inserting data
+
 To insert timeseries data, we get the inserter from mongotd. We specify
 the resolution to use. Any datetimes used later on will be rounded to
 this resolution, and space will be allocated accordingly. The maximum
@@ -41,8 +43,9 @@ and a bool true if the counter is of type incremental (always increasing).
 
 When all counter values are added, run the insert function.
 The values are then batch inserted into mongodb.
+
 ````php
-$inserter = $mongotd->getInserter($insert_resolution);
+$inserter = $mongotd->getInserter();
 
 $insertInterval = \Mongotd\Resolution::FIVE_MINUTES;
 $inserter->setInterval($insertInterval);
@@ -66,10 +69,13 @@ $inserter->add($sensor_id3, $node_id, $datetime, $value3, $is_incremental);
 $inserter->insert();
 ````
 
+### Retrieving data
+
 To get the timeseries data out of the database, we use the retriever.
 Desired resolution and aggregation must be specified, and also an
 optional padding value which will be used if no data is found for a given datetime.
 The result set is given as an associative array with the datetime string as the key.
+
 ````php
 $retriever = $mongotd->getRetriever();
 $from = new \DateTime('-1 day');
@@ -81,6 +87,8 @@ foreach($values_by_date as $date_str => $value){
     // Graph the values
 }
 ````
+
+### Retrieving anomalies
 
 Using the retriever, we can also get a list of the current
 sensors which register as abnormal (this is calculated at the time of insertion).
