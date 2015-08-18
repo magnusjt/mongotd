@@ -1,0 +1,11 @@
+{
+  "timezone":                "Europe/Oslo",
+  "dbhost":                  "localhost",
+  "dbname":                  "test",
+  "dbprefix":                "test",
+  "doInsertion":             false,
+  "insertIntervalInSeconds": 300,
+  "starttime":               "-60 days",
+  "retrieveAggregation":     1,
+  "retrieveResolution":      86400
+}

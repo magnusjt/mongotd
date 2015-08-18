@@ -2,7 +2,6 @@
 
 use \Psr\Log\LoggerInterface;
 use \DateTime;
-use \DatePeriod;
 use \DateInterval;
 use \DateTimeZone;
 use \MongoDate;
@@ -25,6 +24,75 @@ class Retriever{
         $this->logger = $logger;
         $this->kpiParser = $kpiParser;
         $this->astEvaluator = $astEvaluator;
+    }
+
+    /**
+     * @param $sid         string
+     * @param $nid         string
+     * @param $start       \DateTime
+     * @param $end         \DateTime
+     * @param $resolution  int
+     * @param $aggregation int
+     * @param $padding     mixed
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function getByTimestamp($sid, $nid, $start, $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
+        $start = clone $start;
+        $end = clone $end;
+        $this->normalizeDatetimes($start, $end, $resolution);
+        $targetTimezone = $start->getTimezone();
+        $timezoneOffset = $targetTimezone->getOffset($start);
+
+        $startMongo = clone $start;
+        $endMongo = clone $end;
+        $startMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
+        $endMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
+
+        $match = array(
+            'sid' => (string)$sid,
+            'nid' => (string)$nid,
+            'mongodate' => array(
+                '$gte' => new MongoDate($startMongo->getTimestamp()),
+                '$lte' => new MongoDate($endMongo->getTimestamp())
+            )
+        );
+
+        $cursor = $this->conn->col('cv')->find($match, array('mongodate' => 1, 'vals' => 1));
+
+        $valsByTimestamp = array();
+        foreach($cursor as $doc){
+            $timestamp = $doc['mongodate']->sec;
+            foreach($doc['vals'] as $seconds => $value){
+                if($value === null){
+                    continue;
+                }
+
+                $valsByTimestamp[$timestamp+$seconds] = $value;
+            }
+        }
+
+        $valsByTimestamp = $this->aggregateTime($valsByTimestamp, $resolution, $aggregation, $timezoneOffset, $padding);
+        return $this->padValues($valsByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resolution, $padding);
+    }
+
+    /**
+     * @param $sid         string
+     * @param $nid         string
+     * @param $start       \DateTime
+     * @param $end         \DateTime
+     * @param $resolution  int
+     * @param $aggregation int
+     * @param $padding     mixed
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function get($sid, $nid, $start, $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
+        $valsByTimestamp = $this->getByTimestamp($sid, $nid, $start, $end, $resolution, $aggregation, $padding);
+        $valsByDate = $this->valsByTimestampToValsByDateStr($valsByTimestamp, $start->getTimezone());
+        return $valsByDate;
     }
 
     /**
@@ -76,80 +144,23 @@ class Retriever{
         $start = clone $start;
         $end = clone $end;
         $this->normalizeDatetimes($start, $end, $resultResolution);
+        $targetTimezone = $start->getTimezone();
+        $timezoneOffset = $targetTimezone->getOffset($start);
 
         $series = array();
         foreach($nids as $nid){
-            $series[] = $this->getFormula($formula, $nid, $start, $end, $nodeResolution, $formulaResolution, $formulaAggregation, $padding);
+            $series[] = $this->getFormulaByTimestamp($formula, $nid, $start, $end, $nodeResolution, $formulaResolution, $formulaAggregation, $padding);
         }
 
-        $valsByDate = $this->aggregateAcross($series, $nodeAggregation, $padding);
-        $valsByDate = $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
-        $valsByDate = $this->padValues($valsByDate, $start, $end, $resultResolution, $padding);
-        return $valsByDate;
+        $valsByTimestamp = $this->aggregateAcross($series, $nodeAggregation, $padding);
+        $valsByTimestamp = $this->aggregateTime($valsByTimestamp, $resultResolution, $resultAggregation, $timezoneOffset, $padding);
+        $valsByTimestamp = $this->padValues($valsByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resultResolution, $padding);
+        return $this->valsByTimestampToValsByDateStr($valsByTimestamp, $targetTimezone);
     }
 
     /**
-     * @param $sid         string
-     * @param $nid         string
-     * @param $start       \DateTime
-     * @param $end         \DateTime
-     * @param $resolution  int
-     * @param $aggregation int
-     * @param $padding     mixed
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function get($sid, $nid, $start, $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
-        $start = clone $start;
-        $end = clone $end;
-        $this->normalizeDatetimes($start, $end, $resolution);
-
-        $targetTimezone = $start->getTimezone();
-
-        $startMongo = clone $start;
-        $endMongo = clone $end;
-        $startMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
-        $endMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
-
-        $match = array(
-            'sid' => (string)$sid,
-            'nid' => (string)$nid,
-            'mongodate' => array(
-                '$gte' => new MongoDate($startMongo->getTimestamp()),
-                '$lte' => new MongoDate($endMongo->getTimestamp())
-            )
-        );
-
-        $cursor = $this->conn->col('cv')->find($match, array('mongodate' => 1, 'vals' => 1));
-
-        $valsByDate = array();
-        foreach($cursor as $doc){
-            $timestamp = $doc['mongodate']->sec;
-            foreach($doc['vals'] as $seconds => $value){
-                if($value === null){
-                    continue;
-                }
-
-                // Convert to local timezone so date strings are local.
-                $datetime = new DateTime('@'.($timestamp+$seconds));
-                $datetime->setTimezone($targetTimezone);
-                $valsByDate[$datetime->format('Y-m-d H:i:s')] = $value;
-            }
-        }
-
-        $valsByDate = $this->aggregateTime($valsByDate, $aggregation, $resolution, $padding);
-        $valsByDate = $this->padValues($valsByDate, $start, $end, $resolution, $padding);
-        return $valsByDate;
-    }
-
-    /**
-     * This function finds a data series based on a formula. In order to do this,
-     * a separate resolution needs to be specified at which the formula will be calculated.
-     * Every variable used in the formula will be aggregated to this resolution before calculating.
-     * The aggregation used in this case must be specified within the variables.
-     *
-     * After the calculation is done, the data series is further aggregated to the desired result resolution.
+     * Same as getFormulaByTimestamp, except this one returns
+     * with keys as date strings in the same timezone as the input datetime
      *
      * @param $formula           string      KPI syntax is regular arithmetic. Variables: [sid=1,agg=1]
      * @param $nid               string
@@ -173,201 +184,222 @@ class Retriever{
         $formulaResolution = Resolution::FIVE_MINUTES,
         $padding = false
     ){
-        if($resultResolution < $formulaResolution){
+        $valsByTimestamp = $this->getFormulaByTimestamp($formula, $nid, $start, $end, $resultResolution, $resultAggregation, $formulaResolution, $padding);
+        return $this->valsByTimestampToValsByDateStr($valsByTimestamp, $start->getTimezone());
+    }
+
+    /**
+     * This function finds a data series based on a formula. In order to do this,
+     * a separate resolution needs to be specified at which the formula will be calculated.
+     * Every variable used in the formula will be aggregated to this resolution before calculating.
+     * The aggregation used in this case must be specified within the variables.
+     *
+     * After the calculation is done, the data series is further aggregated to the desired result resolution.
+     *
+     * @param $formula           string      KPI syntax is regular arithmetic. Variables: [sid=1,agg=1]
+     * @param $nid               string
+     * @param $start             DateTime
+     * @param $end               DateTime
+     * @param $resultResolution  int
+     * @param $formulaResolution int
+     * @param $resultAggregation int
+     * @param $padding           bool
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function getFormulaByTimestamp(
+        $formula,
+        $nid,
+        DateTime $start,
+        DateTime $end,
+        $resultResolution = Resolution::FIVE_MINUTES,
+        $resultAggregation = Aggregation::SUM,
+        $formulaResolution = Resolution::FIVE_MINUTES,
+        $padding = false
+    )
+    {
+        if ($resultResolution < $formulaResolution) {
             throw new \Exception('End result resolution must be equal or higher than the formula resolution');
         }
 
         $start = clone $start;
         $end = clone $end;
         $this->normalizeDatetimes($start, $end, $resultResolution);
+        $targetTimezone = $start->getTimezone();
+        $timezoneOffset = $targetTimezone->getOffset($start);
 
         $this->astEvaluator->setPaddingValue($padding);
-        $this->astEvaluator->setVariableEvaluatorCallback(function($options) use($nid, $start, $end, $formulaResolution, $padding){
-            if(!isset($options['sid'])){
+        $this->astEvaluator->setVariableEvaluatorCallback(function ($options) use ($nid, $start, $end, $formulaResolution, $padding) {
+            if (!isset($options['sid'])) {
                 throw new \Exception('sid was not specified in variable. Need this to determine which sensor to get for the calculation of the formula.');
             }
-            if(!isset($options['agg'])){
+            if (!isset($options['agg'])) {
                 throw new \Exception('agg was not specified in variable. Need this in order to aggregate up to the correct resolution before calculating formula.');
             }
 
-            return $this->get($options['sid'], $nid, $start, $end, $formulaResolution, $options['agg'], $padding);
+            return $this->getByTimestamp($options['sid'], $nid, $start, $end, $formulaResolution, $options['agg'], $padding);
         });
 
         $astNode = $this->kpiParser->parse($formula);
-        $valsByDate = $this->astEvaluator->evaluate($astNode);
-        $valsByDate = $this->aggregateTime($valsByDate, $resultAggregation, $resultResolution, $padding);
-        $valsByDate = $this->padValues($valsByDate, $start, $end, $resultResolution, $padding);
-        return $valsByDate;
+        $valsByTimestamp = $this->astEvaluator->evaluate($astNode);
+        $valsByTimestamp = $this->aggregateTime($valsByTimestamp, $resultResolution, $resultAggregation, $timezoneOffset, $padding);
+        return $this->padValues($valsByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resultResolution, $padding);
     }
 
     /**
-     * This function takes an array of valsByDate arrays (dateStr => value),
+     * @param $valsByTimestamp array
+     * @param $targetTimezone  DateTimeZone
+     * @return array
+     */
+    public function valsByTimestampToValsByDateStr($valsByTimestamp, $targetTimezone){
+        $valsByDateStr = array();
+        foreach($valsByTimestamp as $timestamp => $value){
+            $datetime = new DateTime('@'.($timestamp));
+            $datetime->setTimezone($targetTimezone);
+            $valsByDateStr[$datetime->format('Y-m-d H:i:s')] = $value;
+        }
+
+        return $valsByDateStr;
+    }
+
+    /**
+     * Makes sure there is a data point for every resolution step.
+     * Uses the padding value if there is no existing value at a given step.
+     *
+     * @param $valsByTimestampIn array
+     * @param $start             int
+     * @param $end               int
+     * @param $resolution        int
+     * @param $padding           mixed
+     * @return array
+     */
+    public function padValues($valsByTimestampIn, $start, $end, $resolution, $padding){
+        $valsByTimestamp = array();
+        for($step = $start; $step < $end; $step += $resolution){
+            $valsByTimestamp[$step] = $padding;
+        }
+
+        foreach($valsByTimestampIn as $second => $value){
+            if(isset($valsByTimestamp[$second])){
+                $valsByTimestamp[$second] = $value;
+            }
+        }
+
+        return $valsByTimestamp;
+    }
+
+    /**
+     * Aggregates time within the given timezone (but returns in timestamps).
+     *
+     * @param $valsByTimestampIn array
+     * @param $resolution        int
+     * @param $aggregation       int
+     * @param $timezoneOffset    int
+     * @param $padding           mixed
+     * @return array
+     */
+    public function aggregateTime($valsByTimestampIn, $resolution, $aggregation, $timezoneOffset, $padding){
+        $valsByTimestamp = array();
+        $nValsByTimestamp = array();
+        foreach($valsByTimestampIn as $timestamp => $value){
+            if($value === $padding){
+                continue;
+            }
+
+            /*
+             * Here we find the unix time offset by the the timezone
+             * We clamp that time down to the desired resolution, and
+             * lastly move the clamped time back to unix time
+             */
+            $timezoneTime = $timestamp + $timezoneOffset;
+            $roundedTime = $timezoneTime - ($timezoneTime % $resolution);
+            $roundedTime -= $timezoneOffset;
+
+            if($aggregation == Aggregation::SUM){
+                isset($valsByTimestamp[$roundedTime]) ?
+                    $valsByTimestamp[$roundedTime] += $value :
+                    $valsByTimestamp[$roundedTime] = $value;
+            }elseif($aggregation == Aggregation::AVG){
+                isset($valsByTimestamp[$roundedTime]) ?
+                    $valsByTimestamp[$roundedTime] += $value :
+                    $valsByTimestamp[$roundedTime] = $value;
+                isset($nValsByTimestamp[$roundedTime]) ?
+                    $nValsByTimestamp[$roundedTime]++ :
+                    $nValsByTimestamp[$roundedTime] = 1;
+            }elseif($aggregation == Aggregation::MAX){
+                isset($valsByTimestamp[$roundedTime]) ?
+                    $valsByTimestamp[$roundedTime] = max($valsByTimestamp[$roundedTime], $value) :
+                    $valsByTimestamp[$roundedTime] = $value;
+            }elseif($aggregation == Aggregation::MIN){
+                isset($valsByTimestamp[$roundedTime]) ?
+                    $valsByTimestamp[$roundedTime] = min($valsByTimestamp[$roundedTime], $value) :
+                    $valsByTimestamp[$roundedTime] = $value;
+            }
+        }
+
+        if($aggregation == Aggregation::AVG){
+            foreach($valsByTimestamp as $second => $value){
+                $valsByTimestamp[$second] = $value/$valsByTimestamp[$second];
+            }
+        }
+
+        return $valsByTimestamp;
+    }
+
+    /**
+     * This function takes an array of valsByTimestamp arrays (timestamp => value),
      * and merges them into one, using the specified aggregation method.
      *
-     * It assumes that the dateStr keys are equal for all the arrays.
+     * It assumes that the timestamp keys are equal for all the arrays.
      *
      * Ignores all pad values in the calculations! The result needs to be repadded.
      *
-     * @param $series      array    Array of valsByDate
+     * @param $series      array    Array of valsByTimestamp
      * @param $aggregation int
      * @param $padding     mixed
      *
      * @return array
      */
     public function aggregateAcross($series, $aggregation, $padding = false){
-        $valsByDate = array();
-        $countsByDate = array();
+        $valsByTimestamp = array();
+        $nValsByTimestamp = array();
         for($i = 0; $i < count($series); $i++){
-            foreach($series[$i] as $dateStr => $value){
+            foreach($series[$i] as $timestamp => $value){
                 if($value === $padding){
                     continue;
                 }
 
-                if(isset($valsByDate[$dateStr])){
-                    if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
-                        $valsByDate[$dateStr] += $value;
-                    }else if($aggregation == Aggregation::MAX){
-                        $valsByDate[$dateStr] = max($valsByDate[$dateStr], $value);
-                    }else if($aggregation == Aggregation::MIN){
-                        $valsByDate[$dateStr] = min($valsByDate[$dateStr], $value);
-                    }
-                }else{
-                    $valsByDate[$dateStr] = $value;
-                }
-
-                if(isset($countsByDate[$dateStr])){
-                    $countsByDate[$dateStr]++;
-                }else{
-                    $countsByDate[$dateStr] = 1;
+                if($aggregation == Aggregation::SUM){
+                    isset($valsByTimestamp[$timestamp]) ?
+                        $valsByTimestamp[$timestamp] += $value :
+                        $valsByTimestamp[$timestamp] = $value;
+                }elseif($aggregation == Aggregation::AVG){
+                    isset($valsByTimestamp[$timestamp]) ?
+                        $valsByTimestamp[$timestamp] += $value :
+                        $valsByTimestamp[$timestamp] = $value;
+                    isset($nValsByTimestamp[$timestamp]) ?
+                        $nValsByTimestamp[$timestamp]++ :
+                        $nValsByTimestamp[$timestamp] = 1;
+                }elseif($aggregation == Aggregation::MAX){
+                    isset($valsByTimestamp[$timestamp]) ?
+                        $valsByTimestamp[$timestamp] = max($valsByTimestamp[$timestamp], $value) :
+                        $valsByTimestamp[$timestamp] = $value;
+                }elseif($aggregation == Aggregation::MIN){
+                    isset($valsByTimestamp[$timestamp]) ?
+                        $valsByTimestamp[$timestamp] = min($valsByTimestamp[$timestamp], $value) :
+                        $valsByTimestamp[$timestamp] = $value;
                 }
             }
         }
 
         if($aggregation == Aggregation::AVG){
-            foreach($valsByDate as $dateStr => $value){
-                $valsByDate[$dateStr] /= $countsByDate[$dateStr];
+            foreach($valsByTimestamp as $timestamp => $value){
+                $valsByTimestamp[$timestamp] /= $nValsByTimestamp[$timestamp];
             }
         }
 
-        return $valsByDate;
-    }
-
-    /**
-     * This function takes a valsByDate (dateStr => value) array
-     * and aggregates up to a more coarse resolution
-     *
-     * Ignores all pad values in the calculations! The result needs to be repadded.
-     *
-     * @param $valsByDateIn array
-     * @param $aggregation  int
-     * @param $resolution   int
-     * @param $padding      mixed
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function aggregateTime(array $valsByDateIn, $aggregation, $resolution, $padding = false){
-        // Depending on the resolution, the values will be clamped
-        // to different datetimes.
-        if($resolution == Resolution::MINUTE){
-            $clampFunction = '\Mongotd\DateTimeHelper::clampToMinute';
-        }else if($resolution == Resolution::FIVE_MINUTES){
-            $clampFunction = '\Mongotd\DateTimeHelper::clampToFiveMin';
-        }else if($resolution == Resolution::FIFTEEEN_MINUTES){
-            $clampFunction = '\Mongotd\DateTimeHelper::clampToFifteenMin';
-        }else if($resolution == Resolution::HOUR){
-            $clampFunction = '\Mongotd\DateTimeHelper::clampToHour';
-        }else if($resolution == Resolution::DAY){
-            $clampFunction = '\Mongotd\DateTimeHelper::clampToDay';
-        }else{
-            throw new \Exception('Invalid resolution given');
-        }
-
-        $valsByDate = array();
-        $countsByDate = array();
-        foreach($valsByDateIn as $dateStr => $value){
-            if($value === $padding){
-                continue;
-            }
-
-            $datetime = new DateTime($dateStr);
-
-            // Clamp the datetime so it is unique for the current resolution
-            $dateStr = call_user_func($clampFunction, $datetime)->format('Y-m-d H:i:s');
-
-            if(isset($valsByDate[$dateStr])){
-                if($aggregation == Aggregation::SUM or $aggregation == Aggregation::AVG){
-                    $valsByDate[$dateStr] += $value;
-                }else if($aggregation == Aggregation::MAX){
-                    $valsByDate[$dateStr] = max($valsByDate[$dateStr], $value);
-                }else if($aggregation == Aggregation::MIN){
-                    $valsByDate[$dateStr] = min($valsByDate[$dateStr], $value);
-                }
-            }else{
-                $valsByDate[$dateStr] = $value;
-            }
-
-            if(isset($countsByDate[$dateStr])){
-                $countsByDate[$dateStr]++;
-            }else{
-                $countsByDate[$dateStr] = 1;
-            }
-        }
-
-        if($aggregation == Aggregation::AVG){
-            foreach($valsByDate as $dateStr => $value){
-                $valsByDate[$dateStr] /= $countsByDate[$dateStr];
-            }
-        }
-
-        return $valsByDate;
-    }
-
-    /**
-     * @param $valsByDate array
-     * @param $start      DateTime
-     * @param $end        DateTime
-     * @param $resolution int
-     * @param $padding    mixed
-     *
-     * Makes sure that there are values for every datetime in the period with the given resolution.
-     * Adds the padding value if there is missing data
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function padValues($valsByDate, $start, $end, $resolution, $padding){
-        if($resolution == Resolution::MINUTE){
-            $interval = '1 minute';
-        }else if($resolution == Resolution::FIVE_MINUTES){
-            $interval = '5 minutes';
-        }else if($resolution == Resolution::FIFTEEEN_MINUTES){
-            $interval = '15 minutes';
-        }else if($resolution == Resolution::HOUR){
-            $interval = '1 hour';
-        }else if($resolution == Resolution::DAY){
-             $interval = '1 day';
-        }else{
-            throw new \Exception('Invalid resolution given');
-        }
-
-        $dateperiod = new DatePeriod($start, \DateInterval::createFromDateString($interval), $end);
-
-        // Create a template array with padded values
-        $valsByDatePadded = array();
-        foreach($dateperiod as $datetime){
-            $dateStr = $datetime->format('Y-m-d H:i:s');
-            $valsByDatePadded[$dateStr] = $padding;
-        }
-
-        // Fill in the actual values in the template array
-        foreach($valsByDate as $dateStr => $val){
-            if(isset($valsByDatePadded[$dateStr])){
-                $valsByDatePadded[$dateStr] = $val;
-            }
-        }
-
-        return $valsByDatePadded;
+        return $valsByTimestamp;
     }
 
     /**
@@ -507,5 +539,35 @@ class Retriever{
         }
 
         return $result;
+    }
+
+    /**
+     * Takes an array of anomalies, and computes
+     * an array of states (0 if no anomalies and 1 if at least one anomaly),
+     * normalized to the given resolution and over the given time range
+     *
+     * @param $anomalies   Anomaly[]
+     * @param $start       DateTime
+     * @param $end         DateTime
+     * @param $resolution  int
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function getAnomalyStateArray($anomalies, $start, $end, $resolution){
+        $start = clone $start;
+        $end = clone $end;
+        $this->normalizeDatetimes($start, $end, $resolution);
+        $targetTimezone = $start->getTimezone();
+        $timezoneOffset = $targetTimezone->getOffset($start);
+
+        $stateByTimestamp = array();
+        foreach($anomalies as $anomaly){
+            $stateByTimestamp[$anomaly->cv->datetime->getTimestamp()] = 1;
+        }
+
+        $stateByTimestamp = $this->aggregateTime($stateByTimestamp, $resolution, Aggregation::MAX, $timezoneOffset, 0);
+        $stateByTimestamp = $this->padValues($stateByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resolution, 0);
+        return $this->valsByTimestampToValsByDateStr($stateByTimestamp, $targetTimezone);
     }
 }

@@ -1,6 +1,8 @@
 <?php
 
+use Mongotd\Anomaly;
 use \Mongotd\Connection;
+use Mongotd\CounterValue;
 use \Mongotd\Mongotd;
 use \Mongotd\Resolution;
 use \Mongotd\Aggregation;
@@ -81,5 +83,32 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
         $valsByDate = $retriever->getFormula($formula, $someNid, $datetime, $datetime, $someResultResolution, $sumResultAggregation, $someFormulaResolution, $padding);
 
         $this->assertTrue($valsByDate === $expectedValsByDate);
+    }
+
+    public function test_CreateAnomalyStateArray_ResolutionFiveMin_CorrectlyGenerated(){
+        $retriever = $this->mongotd->getRetriever();
+        $anomalies = array(
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:01:23'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:03:23'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:06:15'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:07:01'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:09:01'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:15:01'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:16:00'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:19:00'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:20:00'), 1), 1),
+            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:24:59'), 1), 1),
+        );
+        $expectedStates = array(
+            '2015-02-20 00:00:00' => 1,
+            '2015-02-20 00:05:00' => 1,
+            '2015-02-20 00:10:00' => 0,
+            '2015-02-20 00:15:00' => 1,
+            '2015-02-20 00:20:00' => 1,
+            '2015-02-20 00:25:00' => 0,
+        );
+
+        $states = $retriever->getAnomalyStateArray($anomalies, new DateTime('2015-02-20 00:00:00'), new DateTime('2015-02-20 00:29:59'), Resolution::FIVE_MINUTES);
+        $this->assertTrue($states === $expectedStates);
     }
 }
