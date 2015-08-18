@@ -340,7 +340,7 @@ class Retriever{
 
         if($aggregation == Aggregation::AVG){
             foreach($valsByTimestamp as $second => $value){
-                $valsByTimestamp[$second] = $value/$valsByTimestamp[$second];
+                $valsByTimestamp[$second] = $value/$nValsByTimestamp[$second];
             }
         }
 
