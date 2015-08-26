@@ -26,36 +26,23 @@ class Retriever{
         $this->astEvaluator = $astEvaluator;
     }
 
-    /**
-     * @param $sid         string
-     * @param $nid         string
-     * @param $start       \DateTime
-     * @param $end         \DateTime
-     * @param $resolution  int
-     * @param $aggregation int
-     * @param $padding     mixed
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function getByTimestamp($sid, $nid, $start, $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
+    protected function getRaw(
+        $sid,
+        $nid,
+        DateTime $start,
+        DateTime $end
+    ){
         $start = clone $start;
         $end = clone $end;
-        $this->normalizeDatetimes($start, $end, $resolution);
-        $targetTimezone = $start->getTimezone();
-        $timezoneOffset = $targetTimezone->getOffset($start);
-
-        $startMongo = clone $start;
-        $endMongo = clone $end;
-        $startMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
-        $endMongo->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
+        $start->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
+        $end->setTimezone(new DateTimeZone('UTC'))->setTime(0,0,0);
 
         $match = array(
             'sid' => (string)$sid,
             'nid' => (string)$nid,
             'mongodate' => array(
-                '$gte' => new MongoDate($startMongo->getTimestamp()),
-                '$lte' => new MongoDate($endMongo->getTimestamp())
+                '$gte' => new MongoDate($start->getTimestamp()),
+                '$lte' => new MongoDate($end->getTimestamp())
             )
         );
 
@@ -73,164 +60,21 @@ class Retriever{
             }
         }
 
-        $valsByTimestamp = $this->aggregateTime($valsByTimestamp, $resolution, $aggregation, $timezoneOffset, $padding);
-        return $this->padValues($valsByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resolution, $padding);
+        return $valsByTimestamp;
     }
 
-    /**
-     * @param $sid         string
-     * @param $nid         string
-     * @param $start       \DateTime
-     * @param $end         \DateTime
-     * @param $resolution  int
-     * @param $aggregation int
-     * @param $padding     mixed
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function get($sid, $nid, $start, $end, $resolution = Resolution::FIFTEEEN_MINUTES, $aggregation = Aggregation::SUM, $padding = false){
-        $valsByTimestamp = $this->getByTimestamp($sid, $nid, $start, $end, $resolution, $aggregation, $padding);
-        $valsByDate = $this->valsByTimestampToValsByDateStr($valsByTimestamp, $start->getTimezone());
-        return $valsByDate;
-    }
-
-    /**
-     * This function allows you to retrieve dataseries based on a formula, and a set of node ids.
-     *
-     * Steps to do the aggregations:
-     * 1. The formula is calculated for each node. The formula is calculated at a certain resolution.
-     *    The result of the formula is then aggregated further up to another resolution.
-     * 2. Aggregation is performed over the node ids
-     * 3. The final aggregation is done up to the desired end resolution.
-     *
-     *
-     * @param $formula              string    KPI formula
-     * @param $nids                 string[]  Node ids to aggregate
-     * @param $start                DateTime
-     * @param $end                  DateTime
-     * @param $resultResolution     int       Resolution of the end result
-     * @param $resultAggregation    int       Aggregation up to the end result
-     * @param $formulaResolution    int       Resolution at which the formula is calculated
-     * @param $formulaAggregation   int       Aggregation of the formula result
-     * @param $nodeResolution       int       Resolution at which the nodes are aggregated
-     * @param $nodeAggregation      int       Aggregation of the nodes
-     * @param $padding              mixed     Padding value for missing data
-     *
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function getAdvanced(
-        $formula,
-        array $nids,
-        DateTime $start,
-        DateTime $end,
-        $resultResolution = Resolution::FIVE_MINUTES,
-        $resultAggregation = Aggregation::SUM,
-        $formulaResolution = Resolution::FIVE_MINUTES,
-        $formulaAggregation = Aggregation::SUM,
-        $nodeResolution = Resolution::FIVE_MINUTES,
-        $nodeAggregation = Aggregation::SUM,
-        $padding = false
-    ){
-        if($resultResolution < $nodeResolution){
-            throw new \Exception('End result resolution must be equal or higher than the node resolution');
-        }
-        if($nodeResolution < $formulaResolution){
-            throw new \Exception('Node resolution must be equal or higher than the formula resolution');
-        }
-
-        $start = clone $start;
-        $end = clone $end;
-        $this->normalizeDatetimes($start, $end, $resultResolution);
-        $targetTimezone = $start->getTimezone();
-        $timezoneOffset = $targetTimezone->getOffset($start);
-
-        $series = array();
-        foreach($nids as $nid){
-            $series[] = $this->getFormulaByTimestamp($formula, $nid, $start, $end, $nodeResolution, $formulaResolution, $formulaAggregation, $padding);
-        }
-
-        $valsByTimestamp = $this->aggregateAcross($series, $nodeAggregation, $padding);
-        $valsByTimestamp = $this->aggregateTime($valsByTimestamp, $resultResolution, $resultAggregation, $timezoneOffset, $padding);
-        $valsByTimestamp = $this->padValues($valsByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resultResolution, $padding);
-        return $this->valsByTimestampToValsByDateStr($valsByTimestamp, $targetTimezone);
-    }
-
-    /**
-     * Same as getFormulaByTimestamp, except this one returns
-     * with keys as date strings in the same timezone as the input datetime
-     *
-     * @param $formula           string      KPI syntax is regular arithmetic. Variables: [sid=1,agg=1]
-     * @param $nid               string
-     * @param $start             DateTime
-     * @param $end               DateTime
-     * @param $resultResolution  int
-     * @param $formulaResolution int
-     * @param $resultAggregation int
-     * @param $padding           bool
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function getFormula(
+    protected function evaluateFormula(
         $formula,
         $nid,
         DateTime $start,
         DateTime $end,
-        $resultResolution = Resolution::FIVE_MINUTES,
-        $resultAggregation = Aggregation::SUM,
-        $formulaResolution = Resolution::FIVE_MINUTES,
-        $padding = false
+        $resolution,
+        $padding
     ){
-        $valsByTimestamp = $this->getFormulaByTimestamp($formula, $nid, $start, $end, $resultResolution, $resultAggregation, $formulaResolution, $padding);
-        return $this->valsByTimestampToValsByDateStr($valsByTimestamp, $start->getTimezone());
-    }
-
-    /**
-     * This function finds a data series based on a formula. In order to do this,
-     * a separate resolution needs to be specified at which the formula will be calculated.
-     * Every variable used in the formula will be aggregated to this resolution before calculating.
-     * The aggregation used in this case must be specified within the variables.
-     *
-     * After the calculation is done, the data series is further aggregated to the desired result resolution.
-     *
-     * @param $formula           string      KPI syntax is regular arithmetic. Variables: [sid=1,agg=1]
-     * @param $nid               string
-     * @param $start             DateTime
-     * @param $end               DateTime
-     * @param $resultResolution  int
-     * @param $formulaResolution int
-     * @param $resultAggregation int
-     * @param $padding           bool
-     *
-     * @return array
-     * @throws \Exception
-     */
-    public function getFormulaByTimestamp(
-        $formula,
-        $nid,
-        DateTime $start,
-        DateTime $end,
-        $resultResolution = Resolution::FIVE_MINUTES,
-        $resultAggregation = Aggregation::SUM,
-        $formulaResolution = Resolution::FIVE_MINUTES,
-        $padding = false
-    )
-    {
-        if ($resultResolution < $formulaResolution) {
-            throw new \Exception('End result resolution must be equal or higher than the formula resolution');
-        }
-
-        $start = clone $start;
-        $end = clone $end;
-        $this->normalizeDatetimes($start, $end, $resultResolution);
-        $targetTimezone = $start->getTimezone();
-        $timezoneOffset = $targetTimezone->getOffset($start);
-
+        $timezoneOffset = $start->getTimezone()->getOffset($start);
         $this->astEvaluator->setPaddingValue($padding);
-        $this->astEvaluator->setVariableEvaluatorCallback(function ($options) use ($nid, $start, $end, $formulaResolution, $padding) {
+        $this->astEvaluator->setVariableEvaluatorCallback(
+            function ($options) use ($nid, $start, $end, $resolution, $timezoneOffset, $padding){
             if (!isset($options['sid'])) {
                 throw new \Exception('sid was not specified in variable. Need this to determine which sensor to get for the calculation of the formula.');
             }
@@ -238,25 +82,93 @@ class Retriever{
                 throw new \Exception('agg was not specified in variable. Need this in order to aggregate up to the correct resolution before calculating formula.');
             }
 
-            return $this->getByTimestamp($options['sid'], $nid, $start, $end, $formulaResolution, $options['agg'], $padding);
+            $valsByTimestamp = $this->getRaw($options['sid'], $nid, $start, $end);
+            $valsByTimestamp = $this->rollUpTime($valsByTimestamp, $resolution, $options['agg'], $timezoneOffset, $padding);
+            $valsByTimestamp = $this->padValues($valsByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resolution, $padding);
+            return $valsByTimestamp;
         });
 
         $astNode = $this->kpiParser->parse($formula);
-        $valsByTimestamp = $this->astEvaluator->evaluate($astNode);
-        $valsByTimestamp = $this->aggregateTime($valsByTimestamp, $resultResolution, $resultAggregation, $timezoneOffset, $padding);
+        return $this->astEvaluator->evaluate($astNode);
+    }
+
+    /**
+     * @param string          $sid
+     * @param string|string[] $nid
+     * @param DateTime        $start
+     * @param DateTime        $end
+     * @param int             $resultResolution
+     * @param int             $resultAggregation
+     * @param mixed           $padding
+     * @param int             $nodeResolution
+     * @param int             $singleNodeAggregation
+     * @param int             $combinedNodesAggregation
+     * @param bool            $evaluateAsFormula
+     * @param int             $formulaResolution
+     *
+     * @return array
+     * @throws \Exception
+     */
+    public function get(
+        $sid,
+        $nid,
+        DateTime $start,
+        DateTime $end,
+        $resultResolution = Resolution::FIFTEEEN_MINUTES,
+        $resultAggregation = Aggregation::SUM,
+        $padding = false,
+        $nodeResolution = Resolution::FIFTEEEN_MINUTES,
+        $singleNodeAggregation = Aggregation::SUM,
+        $combinedNodesAggregation = Aggregation::SUM,
+        $evaluateAsFormula = false,
+        $formulaResolution = Resolution::FIFTEEEN_MINUTES
+    ){
+        $start = clone $start;
+        $end = clone $end;
+        $this->normalizeDatetimes($start, $end, $resultResolution);
+        $timezoneOffset = $start->getTimezone()->getOffset($start);
+
+        if(is_array($nid) and count($nid) == 1){
+            $nid = $nid[0];
+        }
+
+        if(is_array($nid)){
+            $series = array();
+            foreach($nid as $aNid){
+                if($evaluateAsFormula){
+                    $serie = $this->evaluateFormula($sid, $aNid, $start, $end, $formulaResolution, $padding);
+                }else{
+                    $serie = $this->getRaw($sid, $aNid, $start, $end);
+                }
+
+                $serie = $this->rollUpTime($serie, $nodeResolution, $singleNodeAggregation, $timezoneOffset, $padding);
+                $serie = $this->padValues($serie, $start->getTimestamp(), $end->getTimestamp(), $nodeResolution, $padding);
+                $series[] = $serie;
+            }
+            $valsByTimestamp = $this->rollUpAcross($series, $combinedNodesAggregation, $padding);
+        }else{
+            if($evaluateAsFormula){
+                $valsByTimestamp = $this->evaluateFormula($sid, $nid, $start, $end, $formulaResolution, $padding);
+            }else{
+                $valsByTimestamp = $this->getRaw($sid, $nid, $start, $end);
+            }
+        }
+
+        $valsByTimestamp = $this->rollUpTime($valsByTimestamp, $resultResolution, $resultAggregation, $timezoneOffset, $padding);
         return $this->padValues($valsByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resultResolution, $padding);
     }
 
     /**
-     * @param $valsByTimestamp array
-     * @param $targetTimezone  DateTimeZone
+     * @param array        $valsByTimestamp
+     * @param DateTimeZone $timezone
+     *
      * @return array
      */
-    public function valsByTimestampToValsByDateStr($valsByTimestamp, $targetTimezone){
+    public function convertToDateStringKeys($valsByTimestamp, DateTimeZone $timezone){
         $valsByDateStr = array();
         foreach($valsByTimestamp as $timestamp => $value){
             $datetime = new DateTime('@'.($timestamp));
-            $datetime->setTimezone($targetTimezone);
+            $datetime->setTimezone($timezone);
             $valsByDateStr[$datetime->format('Y-m-d H:i:s')] = $value;
         }
 
@@ -299,7 +211,7 @@ class Retriever{
      * @param $padding           mixed
      * @return array
      */
-    public function aggregateTime($valsByTimestampIn, $resolution, $aggregation, $timezoneOffset, $padding){
+    public function rollUpTime($valsByTimestampIn, $resolution, $aggregation, $timezoneOffset, $padding){
         $valsByTimestamp = array();
         $nValsByTimestamp = array();
         foreach($valsByTimestampIn as $timestamp => $value){
@@ -361,7 +273,7 @@ class Retriever{
      *
      * @return array
      */
-    public function aggregateAcross($series, $aggregation, $padding = false){
+    public function rollUpAcross($series, $aggregation, $padding = false){
         $valsByTimestamp = array();
         $nValsByTimestamp = array();
         for($i = 0; $i < count($series); $i++){
@@ -413,7 +325,7 @@ class Retriever{
      *
      * @throws \Exception
      */
-    private function normalizeDatetimes(&$start, &$end, $resolution){
+    protected function normalizeDatetimes(&$start, &$end, $resolution){
         if($resolution == Resolution::MINUTE){
             $start = DateTimeHelper::clampToMinute($start);
             $end = DateTimeHelper::clampToMinute($end);
@@ -554,7 +466,7 @@ class Retriever{
      * @return array
      * @throws \Exception
      */
-    public function getAnomalyStateArray($anomalies, $start, $end, $resolution){
+    public function getAnomalyStates($anomalies, $start, $end, $resolution){
         $start = clone $start;
         $end = clone $end;
         $this->normalizeDatetimes($start, $end, $resolution);
@@ -566,8 +478,7 @@ class Retriever{
             $stateByTimestamp[$anomaly->cv->datetime->getTimestamp()] = 1;
         }
 
-        $stateByTimestamp = $this->aggregateTime($stateByTimestamp, $resolution, Aggregation::MAX, $timezoneOffset, 0);
-        $stateByTimestamp = $this->padValues($stateByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resolution, 0);
-        return $this->valsByTimestampToValsByDateStr($stateByTimestamp, $targetTimezone);
+        $stateByTimestamp = $this->rollUpTime($stateByTimestamp, $resolution, Aggregation::MAX, $timezoneOffset, 0);
+        return $this->padValues($stateByTimestamp, $start->getTimestamp(), $end->getTimestamp(), $resolution, 0);
     }
 }

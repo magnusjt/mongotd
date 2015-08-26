@@ -36,7 +36,8 @@ class StorageTest extends PHPUnit_Framework_TestCase{
         $inserter->add($someSid, $someNid, $someDatetime, $someVal, $incrementalIsFalse);
         $inserter->insert();
 
-        $valsByDate = $retriever->get($someSid, $someNid, $someDatetime, $someDatetime, $someResolution, $someAggregation);
+        $valsByTimestamp = $retriever->get($someSid, $someNid, $someDatetime, $someDatetime, $someResolution, $someAggregation);
+        $valsByDate = $retriever->convertToDateStringKeys($valsByTimestamp, $someDatetime->getTimezone());
 
         $this->assertTrue($valsByDate === $expectedValsByDate);
     }
@@ -65,7 +66,8 @@ class StorageTest extends PHPUnit_Framework_TestCase{
         $inserter->add($someSid, $someNid, $secondDatetime15MinAfterFirst, $someValue2, $incrementalIsTrue);
         $inserter->insert();
 
-        $valsByDate = $retriever->get($someSid, $someNid, $secondDatetime15MinAfterFirst, $secondDatetime15MinAfterFirst, $resolution15min, $someAggregation);
+        $valsByTimestamp = $retriever->get($someSid, $someNid, $secondDatetime15MinAfterFirst, $secondDatetime15MinAfterFirst, $resolution15min, $someAggregation);
+        $valsByDate = $retriever->convertToDateStringKeys($valsByTimestamp, $firstDatetime->getTimezone());
 
         $this->assertTrue($valsByDate === $expectedValsByDate);
     }

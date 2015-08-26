@@ -1,0 +1,23 @@
+{
+  "name": "mongotd",
+  "version": "0.0.0",
+  "homepage": "https://github.com/magnusjt/mongotd",
+  "authors": [
+    "Magnus Tovslid <magnus.tovslid@gmail.com>"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "bootstrap": "~3.3.5",
+    "flot": "git://github.com/flot/flot.git#v0.8.3",
+    "flot-state-plugin": "git://github.com/magnusjt/flot-state-plugin.git",
+    "flot.tooltip": "~0.8.5",
+    "jquery": "~2.1.4"
+  }
+}

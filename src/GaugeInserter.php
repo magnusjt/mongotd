@@ -63,7 +63,7 @@ class GaugeInserter{
      * The thing that takes time is checking for existing data.
      */
     private function preAllocateIfNecessary($col, $sid, $nid, MongoDate $mongodate){
-        if($col->find(array('sid' => $sid, 'nid' => $nid, 'mongodate' => $mongodate), array('sid' => 1))->limit(1)->count() == 0){
+        if($col->find(array('sid' => (string)$sid, 'nid' => (string)$nid, 'mongodate' => $mongodate), array('sid' => 1))->limit(1)->count() == 0){
             $valsPerSec = array();
             for($second = 0; $second < $this->secondsInADay; $second += $this->intervalInSeconds){
                 $valsPerSec[$second] = null;

@@ -145,8 +145,7 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
                         '2015-02-28 00:00:00' => 1*24
                     )
                 )
-            ),
-
+            )
         );
     }
 
@@ -169,7 +168,8 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
         }
         $inserter->insert();
 
-        $valsByDate = $retriever->get($config['sid'], $config['nid'], $start, $end, $config['retrieveResolution'], $config['aggregation'], 'x');
+        $valsByTimestamp = $retriever->get($config['sid'], $config['nid'], $start, $end, $config['retrieveResolution'], $config['aggregation']);
+        $valsByDate = $retriever->convertToDateStringKeys($valsByTimestamp, $start->getTimezone());
         $msg = $config['description'];
         $msg .= "\nExpected\n";
         $msg .= json_encode($config['expected'], JSON_PRETTY_PRINT);

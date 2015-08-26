@@ -27,13 +27,6 @@ if($config['anomalyDetectionMethod'] == 'ks'){
 $currIteration = 1;
 $totalInserts = 0;
 
-$nidsidPairs = array();
-for($nid = 1; $nid <= $config['nNids']; $nid++){
-    for($sid = 1; $sid <= $config['nSids']; $sid++){
-        $nidsidPairs[] = array('nid' => $nid, 'sid' => $sid);
-    }
-}
-
 while($currIteration <= $config['nIterations']){
     echo "Starting iteration $currIteration...\n";
     $end = clone $start;
@@ -73,7 +66,7 @@ while($currIteration <= $config['nIterations']){
         $retrievals = 0;
         for($nid = 1; $nid <= $config['nNids']; $nid++){
             for($sid = 1; $sid <= $config['nSids']; $sid++){
-                $retriever->get($nid, $sid, $start, $end, $config['retrieveResolution'], $config['retrieveAggregation']);
+                $retriever->get($sid, $nid, $start, $end, $config['retrieveResolution'], $config['retrieveAggregation']);
                 $retrievals++;
             }
         }

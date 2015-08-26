@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <script src="bower_components/jquery/dist/jquery.js"></script>
+    <script src="bower_components/bootstrap/dist/js/bootstrap.js"></script>
+    <script src="bower_components/flot/jquery.flot.js"></script>
+    <script src="bower_components/flot/jquery.flot.time.js"></script>
+    <script src="bower_components/flot.tooltip/js/jquery.flot.tooltip.js"></script>
+    <script src="bower_components/flot-state-plugin/jquery.flot.state.js"></script>
+    <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.css" />
+    <style>
+        #placeholder{
+            padding-bottom: 15px;
+            margin-top: 25px;
+            text-align: center;
+        }
+        .flot-title{
+
+        }
+        .flot-graph{
+
+        }
+        .flot-legend{
+            display: inline-block;
+        }
+        .flot-legend td{
+            padding: 2px;
+        }
+    </style>
+    <script>
+        function numToStrFormatter(val, axis) {
+            if(val > 1000000000) {
+                return (val / 1000000000).toFixed(axis.tickDecimals) + "G";
+            }else if(val > 1000000) {
+                return (val / 1000000).toFixed(axis.tickDecimals) + "M";
+            }else if(val > 1000) {
+                return (val / 1000).toFixed(axis.tickDecimals) + "K";
+            }else{
+                return parseFloat(val).toFixed(axis.tickDecimals);
+            }
+        }
+
+        function tooltipFormatter(label, xval, yval) {
+            var date_time = new Date(xval);
+            var day = date_time.getDate();
+            var month = date_time.getMonth() + 1;
+            var hour = date_time.getHours();
+            if (hour < 10) {
+                hour = '0' + hour;
+            }
+
+            var minute = date_time.getMinutes();
+            if (minute < 10) {
+                minute = '0' + minute;
+            }
+
+            yval = Math.floor(yval * 100) / 100;
+            return label + " - " + day + "/" + month + " " + hour + ":" + minute + " - " + yval;
+        }
+
+        var flotOpts = {
+            axisLabels:{
+                show: true
+            },
+            series:{
+                lines: {show: true},
+                points: {show: true},
+                shadowSize: 1
+            },
+            points:{
+                radius: 1
+            },
+            lines:{
+                lineWidth: 1
+            },
+            legend:{
+                show: true,
+                noColumns: 4
+            },
+            grid:{
+                borderWidth: 1,
+                borderColor: '#aaa',
+                hoverable: true
+            },
+            xaxes: [
+                {
+                    mode: 'time',
+                    timeformat: '%d/%m %H:%M',
+                    timezone: 'browser',
+                    labelAngle: 45
+                },
+                {
+                    mode: 'time',
+                    timeformat: '%d/%m %H:%M',
+                    timezone: 'browser',
+                    labelAngle: 45
+                }
+            ],
+            yaxes: [
+                {
+                    tickFormatter: numToStrFormatter
+                },
+                {
+                    'reserveSpace': false,
+                    'show': false
+                }
+
+            ],
+            tooltip:{
+                show: true,
+                content: tooltipFormatter
+            }
+        };
+
+        function plot(response){
+            var options = $.extend(true, {}, flotOpts);
+
+            var $title = $('<div class="flot-title">' + response.title + '</div>');
+            var $graph = $('<div style="height:400px;width:960px;" class="flot-graph"></div>');
+            var $legendContainer = $('<div class="flot-legend"></div>');
+
+            options.legend.container = $legendContainer;
+
+            options.xaxes[0].min = response.min;
+            options.xaxes[0].max = response.max;
+
+            $("#placeholder").html('').append($title).append($graph).append($legendContainer);
+            $.plot($graph, response.data, options);
+        }
+
+        $(document).ready(function(){
+            $('#load').click(function(e){
+                e.preventDefault();
+                $.ajax('load.php', {
+                    data: {
+                        start: $("#start").val(),
+                        end: $("#end").val(),
+                        sids: $("#sids").val(),
+                        nids: $("#nids").val(),
+                        resolution: $('#resolution').val(),
+                        aggregation: $('#aggregation').val(),
+                        nodeResolution: $("#nodeResolution").val(),
+                        singleNodeAggregation: $("#singleNodeAggregation").val(),
+                        combinedNodeAggregation: $("#combinedNodeAggregation").val(),
+                        asFormula: $("#asFormula").is(':checked'),
+                        formulaResolution: $("#formulaResolution").val()
+                    },
+                    dataType: 'json',
+                    success: function(response){
+                        plot(response);
+                    },
+                    error: function(err){
+                        $("#placeholder").html(err.responseText);
+                    }
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+<div class="container">
+    <div id="placeholder" style="margin: 0 auto;height:400px;width:960px;"></div>
+    <br />
+    <br />
+    <br />
+    <br />
+    <form class="form-horizontal">
+        <div class="form-group form-inline">
+            <label class="col-sm-2 control-label">Sensor IDs:</label>
+            <div class="col-sm-10">
+                <input type="text" id="sids" value="1,2" class="form-control" />
+                <label>Evaluate as formula?
+                    <input type="checkbox" id="asFormula">
+                </label>
+                Intermediate formula resolution:
+                <select id="formulaResolution" class="form-control">
+                    <option value="DAY">Daily</option>
+                    <option value="HOUR">Hourly</option>
+                    <option value="FIFTEEN_MINUTES">Fifteen min</option>
+                    <option value="FIVE_MINUTES" selected>Five min</option>
+                    <option value="ONE_MINUTE">One min</option>
+                </select>
+            </div>
+        </div>
+        <p class="help-block">
+            Sensor IDs separated by comma. One graph per sensor.
+            Alternatively a formula can be used. Variables are of the format [sid=SID,agg=AGG],
+            where SID is the sensor id and AGG is the aggregation to use (1=sum,2=avg,3=max,4=min).
+            If using a formula, a special resolution has to be set as well. The formula will
+            be calculated at this resolution (before further rollup).
+        </p>
+        <div class="form-group form-inline">
+            <label class="col-sm-2 control-label">Node IDs:</label>
+            <div class="col-sm-10">
+                <input type="text" id="nids" value="1,2" class="form-control" />
+                <label>Resolution:</label>
+                <select id="nodeResolution" class="form-control">
+                    <option value="DAY">Daily</option>
+                    <option value="HOUR">Hourly</option>
+                    <option value="FIFTEEN_MINUTES">Fifteen min</option>
+                    <option value="FIVE_MINUTES" selected>Five min</option>
+                    <option value="ONE_MINUTE">One min</option>
+                </select>
+                <label>Pre-Aggregation (per node):</label>
+                <select id="singleNodeAggregation" class="form-control">
+                    <option value="SUM">Sum</option>
+                    <option value="AVG">Average</option>
+                    <option value="MAX">Max</option>
+                    <option value="MIN">Min</option>
+                </select>
+                <label>Aggregation:</label>
+                <select id="combinedNodeAggregation" class="form-control">
+                    <option value="SUM">Sum</option>
+                    <option value="AVG">Average</option>
+                    <option value="MAX">Max</option>
+                    <option value="MIN">Min</option>
+                </select>
+            </div>
+        </div>
+        <p class="help-block">
+            Node IDs separated by comma. If more than one node ID, each node will be rolled
+            up to the given resolution first. Then all nodes will be aggregated together
+            with the given aggregation before rolling up further.
+        </p>
+        <div class="form-group form-inline">
+            <label class="col-sm-2 control-label">Time interval:</label>
+            <div class="col-sm-10">
+                <input type="datetime" id="start" value="-3 days" class="form-control" />
+                to
+                <input type="datetime" id="end" value="now" class="form-control" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="col-sm-2 control-label">Resolution:</label>
+            <div class="col-sm-2">
+            <select id="resolution" class="form-control">
+                <option value="DAY">Daily</option>
+                <option value="HOUR">Hourly</option>
+                <option value="FIFTEEN_MINUTES">Fifteen min</option>
+                <option value="FIVE_MINUTES">Five min</option>
+                <option value="ONE_MINUTE">One min</option>
+            </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="col-sm-2 control-label">Aggregation:</label>
+            <div class="col-sm-2">
+            <select id="aggregation" class="form-control">
+                <option value="SUM">Sum</option>
+                <option value="AVG">Average</option>
+                <option value="MAX">Max</option>
+                <option value="MIN">Min</option>
+            </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="col-sm-2 col-sm-offset-2">
+                <input type="submit" id="load" value="Load" class="btn btn-success">
+            </div>
+        </div>
+    </form>
+    <h3>How to use this page</h3>
+    <p>
+        In order to have some data to show in the graph,
+        you can run on of the functional tests to populate the database.
+        A good start is the AnomalyTest.php. It generates data for
+        SID=1 and NID=1, and tries to add some anomalies in the data.
+        These anomalies should show with red color in the state bar.
+    </p>
+</div>
+</body>
+</html>

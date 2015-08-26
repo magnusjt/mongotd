@@ -2,6 +2,7 @@
 .vagrant/
 profiles/
 vendor/
+bower_components/
 phpunit.xml
 Vagrantfile
 vagrant_bootstrap.sh

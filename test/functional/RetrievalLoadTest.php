@@ -28,6 +28,6 @@ if($config['doInsertion']){
 }
 
 $timerStart = microtime(true);
-$res = $retriever->get($sid, $nid, $start, $end, $config['retrieveResolution'], $config['retrieveAggregation'], 'x');
+$retriever->get($sid, $nid, $start, $end, $config['retrieveResolution'], $config['retrieveAggregation']);
 $totalTime = (microtime(true) - $timerStart);
 echo 'Retrieved in: ' . $totalTime . " seconds\n";

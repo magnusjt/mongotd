@@ -80,9 +80,29 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
         $inserter->add($sid2, $someNid, $datetime, $valSid2, $isIncremental);
         $inserter->insert();
 
-        $valsByDate = $retriever->getFormula($formula, $someNid, $datetime, $datetime, $someResultResolution, $sumResultAggregation, $someFormulaResolution, $padding);
+        $valsByTimestamp = $retriever->get(
+            $formula,
+            $someNid,
+            $datetime,
+            $datetime,
+            $someResultResolution,
+            $sumResultAggregation,
+            $padding,
+            null,
+            null,
+            null,
+            true,
+            $someFormulaResolution
+        );
+        $valsByDate = $retriever->convertToDateStringKeys($valsByTimestamp, $datetime->getTimezone());
 
-        $this->assertTrue($valsByDate === $expectedValsByDate);
+        $msg = 'Formula test';
+        $msg .= "\nExpected\n";
+        $msg .= json_encode($expectedValsByDate, JSON_PRETTY_PRINT);
+        $msg .= "\nActual:\n";
+        $msg .= json_encode($valsByDate, JSON_PRETTY_PRINT);
+
+        $this->assertTrue($valsByDate === $expectedValsByDate, $msg);
     }
 
     public function test_CreateAnomalyStateArray_ResolutionFiveMin_CorrectlyGenerated(){
@@ -108,7 +128,12 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
             '2015-02-20 00:25:00' => 0,
         );
 
-        $states = $retriever->getAnomalyStateArray($anomalies, new DateTime('2015-02-20 00:00:00'), new DateTime('2015-02-20 00:29:59'), Resolution::FIVE_MINUTES);
-        $this->assertTrue($states === $expectedStates);
+        $start = new DateTime('2015-02-20 00:00:00');
+        $end = new DateTime('2015-02-20 00:29:59');
+
+        $statesByTimestamp = $retriever->getAnomalyStates($anomalies, $start, $end, Resolution::FIVE_MINUTES);
+        $statesByDate = $retriever->convertToDateStringKeys($statesByTimestamp, $start->getTimezone());
+
+        $this->assertTrue($statesByDate === $expectedStates);
     }
 }

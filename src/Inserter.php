@@ -61,7 +61,7 @@ class Inserter{
             }
         }
 
-        $cv = new CounterValue($sid, $nid, clone $datetime, $value);
+        $cv = new CounterValue((string)$sid, (string)$nid, clone $datetime, $value);
 
         if($isIncremental){
             $this->cvsIncremental[] = $cv;
