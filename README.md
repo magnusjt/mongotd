@@ -22,6 +22,14 @@ space (sum/avg/max/min over certain nodes), or by a given formula. Do note, howe
 is not done. This is to avoid the timezone problem (i.e. a certain day may contain different hours, depending on which time
 zone the data is viewed in).
 
+## Installation
+
+Install with composer:
+
+````
+composer require magnusjt/mongotd
+````
+
 ## Basic usage
 
 First we grab a mongodb connection and initialize mongotd.
