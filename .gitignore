@@ -4,8 +4,6 @@ profiles/
 vendor/
 bower_components/
 phpunit.xml
-Vagrantfile
-vagrant_bootstrap.sh
 test/functional/loadTestConfig.json
 test/functional/anomalyTestConfig.json
 test/functional/retrievalLoadTestConfig.json
