@@ -1,8 +1,11 @@
-<?php namespace Mongotd;
+<?php namespace Mongotd\StorageMiddleware;
 
-use \MongoUpdateBatch;
-use \MongoDate;
-use \DateTime;
+use Mongotd\Connection;
+use MongoUpdateBatch;
+use MongoDate;
+use DateTime;
+use Mongotd\Anomaly;
+use Mongotd\CounterValue;
 
 class HwCache{
     public $sid       = NULL;
@@ -18,7 +21,13 @@ class HwCache{
 /**
  * Scans for anomalies using holt-winters algorithm
  */
-class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface{
+class FindAnomaliesUsingHwTest{
+    protected $conn;
+
+    public function __construct(Connection $conn){
+        $this->conn = $conn;
+    }
+
     /** @var int  */
     private $minDaysScanned = 20;
 
@@ -63,9 +72,12 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
 
     /**
      * @param $cvs CounterValue[]
+     *
+     * @return array
      */
-    public function scan(array $cvs){
+    public function run(array $cvs){
         $col = $this->conn->col('hwcache');
+        $anomalies = [];
         $batchUpdate  = new MongoUpdateBatch($col);
         foreach($cvs as $cv){
             $cache = new HwCache();
@@ -100,9 +112,8 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
                 );
             }
 
-            if($this->updateHwCache($cache, $cv->value) and
-               $cv->datetime->diff($created)->days > $this->minDaysScanned){
-                $this->storeAnomaly(new Anomaly($cv, $cache->pred));
+            if($this->updateHwCache($cache, $cv->value) and $cv->datetime->diff($created)->days > $this->minDaysScanned){
+                $anomalies[] = new Anomaly($cv, $cache->pred);
             }
 
             $batchUpdate->add(array(
@@ -119,6 +130,7 @@ class AnomalyScannerHw extends AnomalyScanner implements AnomalyScannerInterface
         }
 
         $batchUpdate->execute(array('w' => 1));
+        return ['cvs' => $cvs, 'anomalies' => $anomalies];
     }
 
     /**

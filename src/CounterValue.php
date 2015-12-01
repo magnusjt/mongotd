@@ -1,7 +1,7 @@
 <?php
 namespace Mongotd;
 
-use \DateTime;
+use DateTime;
 
 class CounterValue{
     /** @var  string */
@@ -16,10 +16,14 @@ class CounterValue{
     /** @var  number */
     public $value;
 
-    public function __construct($sid, $nid, DateTime $datetime, $value){
+    /** @var  boolean */
+    public $incremental;
+
+    public function __construct($sid, $nid, DateTime $datetime, $value, $incremental = false){
         $this->sid = $sid;
         $this->nid = $nid;
         $this->datetime = $datetime;
         $this->value = $value;
+        $this->incremental = $incremental;
     }
 }

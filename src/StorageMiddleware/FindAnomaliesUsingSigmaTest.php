@@ -1,7 +1,13 @@
-<?php
-namespace Mongotd;
+<?php namespace Mongotd\StorageMiddleware;
 
-use \DateInterval;
+use DateInterval;
+use DateTime;
+use Mongotd\Anomaly;
+use Mongotd\Connection;
+use Mongotd\CounterValue;
+use Mongotd\Pipeline\FilterWindow;
+use Mongotd\Pipeline\Find;
+use Mongotd\Pipeline\Pipeline;
 
 /**
  * Class takes a list of nids/sids to scan for anomalies using 3 sigma method.
@@ -12,7 +18,13 @@ use \DateInterval;
  * There is a smoothing interval that can be set so that instead of looking at
  * a given point in time, we look at the average during the interval.
  */
-class AnomalyScanner3Sigma extends AnomalyScanner implements AnomalyScannerInterface{
+class FindAnomaliesUsingSigmaTest{
+    protected $conn;
+
+    public function __construct(Connection $conn){
+        $this->conn = $conn;
+    }
+
     /** @var int  */
     private $nDaysToScan = 20;
 
@@ -53,26 +65,43 @@ class AnomalyScanner3Sigma extends AnomalyScanner implements AnomalyScannerInter
      *
      * @return array
      */
-    public function scan(array $cvs){
+    public function run(array $cvs){
+        $anomalies = [];
         foreach($cvs as $cv){
             $datetimeMinusOneDay = clone $cv->datetime;
             $datetimeMinusOneDay->sub(DateInterval::createFromDateString('1 day'));
 
-            $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $datetimeMinusOneDay, $this->nDaysToScan, $this->windowLengthInSeconds);
+            $prevDataPoints = $this->getWindowedVals($cv->sid, $cv->nid, $datetimeMinusOneDay, $this->nDaysToScan);
             if(count($prevDataPoints) < $this->minPrevDataPoints){
                 continue;
             }
 
-            $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, 0, $this->windowLengthInSeconds);
+            $currDataPoints = $this->getWindowedVals($cv->sid, $cv->nid, $cv->datetime, 0);
             if(count($currDataPoints) < $this->minCurrDataPoints){
                 continue;
             }
 
             $predicted = $this->checkForAnomaly($prevDataPoints, $currDataPoints);
             if($predicted !== false){
-                $this->storeAnomaly(new Anomaly($cv, $predicted));
+                $anomalies[] = new Anomaly($cv, $predicted);
             }
         }
+
+        return ['cvs' => $cvs, 'anomalies' => $anomalies];
+    }
+
+    public function getWindowedVals($sid, $nid, DateTime $end, $nDays){
+        $start = clone $end;
+        $start->sub(DateInterval::createFromDateString($nDays . ' days'));
+        $start->sub(DateInterval::createFromDateString($this->windowLengthInSeconds . ' seconds'));
+
+        $pipeline = new Pipeline();
+        $series = $pipeline->run([
+            new Find($this->conn, $sid, $nid, $start, $end),
+            new FilterWindow($start->getTimestamp(), $this->windowLengthInSeconds, 86400)
+        ]);
+
+        return array_values($series->vals);
     }
 
     /**

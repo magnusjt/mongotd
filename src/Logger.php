@@ -1,7 +1,7 @@
 <?php namespace Mongotd;
 
-use \Psr\Log\LoggerInterface;
-use \Psr\Log\LogLevel;
+use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
 
 class Logger implements LoggerInterface{
     /** @var  LoggerInterface|null */

@@ -1,14 +1,26 @@
-<?php
-namespace Mongotd;
+<?php namespace Mongotd\StorageMiddleware;
 
-use \DateInterval;
+use DateInterval;
+use DateTime;
+use Mongotd\Anomaly;
+use Mongotd\Connection;
+use Mongotd\CounterValue;
+use Mongotd\Pipeline\FilterWindow;
+use Mongotd\Pipeline\Find;
+use Mongotd\Pipeline\Pipeline;
 
 /**
  * Scan for anomalies using kolmogorov-smirnov test
  * Check windows of data within smoothing window for a number of days in the past.
  * If the ks distance is large, or pValue is low, it means there is an anomaly
  */
-class AnomalyScannerKs extends AnomalyScanner implements AnomalyScannerInterface{
+class FindAnomaliesUsingKsTest{
+    protected $conn;
+
+    public function __construct(Connection $conn){
+        $this->conn = $conn;
+    }
+
     /** @var int  */
     private $nDaysToScan = 20;
 
@@ -56,17 +68,18 @@ class AnomalyScannerKs extends AnomalyScanner implements AnomalyScannerInterface
      *
      * @return array
      */
-    public function scan(array $cvs){
+    public function run(array $cvs){
+        $anomalies = [];
         foreach($cvs as $cv){
             $datetimeMinusOneDay = clone $cv->datetime;
             $datetimeMinusOneDay->sub(DateInterval::createFromDateString('1 day'));
 
-            $prevDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $datetimeMinusOneDay, $this->nDaysToScan, $this->windowLengthInSeconds);
+            $prevDataPoints = $this->getWindowedVals($cv->sid, $cv->nid, $datetimeMinusOneDay, $this->nDaysToScan);
             if(count($prevDataPoints) < $this->minPrevDataPoints){
                 continue;
             }
 
-            $currDataPoints = $this->getValsWithinWindows($cv->nid, $cv->sid, $cv->datetime, 0, $this->windowLengthInSeconds);
+            $currDataPoints = $this->getWindowedVals($cv->sid, $cv->nid, $cv->datetime, 0);
             if(count($currDataPoints) < $this->minCurrDataPoints){
                 continue;
             }
@@ -75,9 +88,25 @@ class AnomalyScannerKs extends AnomalyScanner implements AnomalyScannerInterface
 
             if($ks !== false and $ks['p'] < $this->pTreshold and $ks['d'] > $this->dTreshold){
                 $predicted = array_sum($prevDataPoints)/count($prevDataPoints); // Not really a good prediction, but KS doesn't deal in predictions
-                $this->storeAnomaly(new Anomaly($cv, $predicted));
+                $anomalies[] = new Anomaly($cv, $predicted);
             }
         }
+
+        return ['cvs' => $cvs, 'anomalies' => $anomalies];
+    }
+
+    public function getWindowedVals($sid, $nid, DateTime $end, $nDays){
+        $start = clone $end;
+        $start->sub(DateInterval::createFromDateString($nDays . ' days'));
+        $start->sub(DateInterval::createFromDateString($this->windowLengthInSeconds . ' seconds'));
+
+        $pipeline = new Pipeline();
+        $series = $pipeline->run([
+            new Find($this->conn, $sid, $nid, $start, $end),
+            new FilterWindow($start->getTimestamp(), $this->windowLengthInSeconds, 86400)
+        ]);
+
+        return array_values($series->vals);
     }
 
     /* The algorithm for this function:

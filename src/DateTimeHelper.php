@@ -1,7 +1,9 @@
 <?php
 namespace Mongotd;
 
-use \DateTime;
+use DateInterval;
+use DateTime;
+use InvalidArgumentException;
 
 class DateTimeHelper{
     /**
@@ -76,4 +78,40 @@ class DateTimeHelper{
         return $datetime;
     }
 
+    /**
+     * @param $start      DateTime
+     * @param $end        DateTime
+     * @param $resolution int
+     *
+     * Clamps the datetimes down to the nearest resolution step.
+     * Also move the end datetime to the next step, so that
+     * the entire step is included in the result.
+     *
+     * @throws InvalidArgumentException
+     */
+    static public function normalizeTimeRange(&$start, &$end, $resolution){
+        if($resolution == Resolution::MINUTE){
+            $start = DateTimeHelper::clampToMinute($start);
+            $end = DateTimeHelper::clampToMinute($end);
+            $end->add(DateInterval::createFromDateString('1 minute'));
+        }else if($resolution == Resolution::FIVE_MINUTES){
+            $start = DateTimeHelper::clampToFiveMin($start);
+            $end = DateTimeHelper::clampToFiveMin($end);
+            $end->add(DateInterval::createFromDateString('5 minutes'));
+        }else if($resolution == Resolution::FIFTEEEN_MINUTES){
+            $start = DateTimeHelper::clampToFifteenMin($start);
+            $end = DateTimeHelper::clampToFifteenMin($end);
+            $end->add(DateInterval::createFromDateString('15 minutes'));
+        }else if($resolution == Resolution::HOUR){
+            $start = DateTimeHelper::clampToHour($start);
+            $end = DateTimeHelper::clampToHour($end);
+            $end->add(DateInterval::createFromDateString('1 hour'));
+        }else if($resolution == Resolution::DAY){
+            $start = DateTimeHelper::clampToDay($start);
+            $end = DateTimeHelper::clampToDay($end);
+            $end->add(DateInterval::createFromDateString('1 day'));
+        }else{
+            throw new InvalidArgumentException('Invalid resolution given');
+        }
+    }
 }

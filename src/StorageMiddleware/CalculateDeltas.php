@@ -1,8 +1,11 @@
-<?php namespace Mongotd;
+<?php namespace Mongotd\StorageMiddleware;
 
-use \Psr\Log\LoggerInterface;
+use Mongotd\Connection;
+use Mongotd\CounterValue;
+use Psr\Log\LoggerInterface;
+use MongoDate;
 
-class DeltaConverter{
+class CalculateDeltas{
     /** @var  Connection */
     private $conn;
 
@@ -29,25 +32,30 @@ class DeltaConverter{
      *
      * @return CounterValue[]
      */
-    public function convert(array $cvs){
+    public function run(array $cvs){
         $cvsDelta = array();
         $col = $this->conn->col('cv_prev');
 
         foreach($cvs as $cv){
-            $timestamp = $cv->datetime->getTimestamp();
-            $mongodate = new \MongoDate($timestamp);
+            if(!$cv->incremental){
+                $cvsDelta[] = $cv;
+            }
 
-            $doc = $col->findOne(array('sid' => (string)$cv->sid, 'nid' => (string)$cv->nid), array('mongodate' => 1, 'value' => 1));
+            $timestamp = $cv->datetime->getTimestamp();
+            $mongodate = new MongoDate($timestamp);
+
+            $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid), array('mongodate' => 1, 'value' => 1));
             if($doc){
                 $delta = $this->getDeltaValue($cv->value, $doc['value'], $timestamp, $doc['mongodate']->sec);
                 if($delta !== false){
-                    $cvsDelta[] = new CounterValue($cv->sid, $cv->nid, $cv->datetime, $delta);
+                    $cv->value = $delta;
+                    $cvsDelta[] = $cv;
                 }
             }
 
-            $col->update(array('sid' => (string)$cv->sid, 'nid' => (string)$cv->nid),
-                         array('$set' => array('mongodate' => $mongodate, 'value' => $cv->value)),
-                         array('upsert' => true));
+            $col->update(array('sid' => $cv->sid, 'nid' => $cv->nid),
+                array('$set' => array('mongodate' => $mongodate, 'value' => $cv->value)),
+                array('upsert' => true));
         }
 
         return $cvsDelta;

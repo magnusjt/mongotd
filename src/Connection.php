@@ -50,4 +50,20 @@ class Connection{
         $lastError = $this->db()->lastError();
         return $lastError['err'];
     }
+
+    public function createIndexes(
+        $expireValuesAfterDays = 120,
+        $expireAnomaliesAfterDays = 120,
+        $expireDeltaCacheAfter = 1
+    ){
+        $this->col('cv_prev')  ->createIndex(['sid' => 1, 'nid' => 1],                   ['unique' => true]);
+        $this->col('cv')       ->createIndex(['sid' => 1, 'nid' => 1, 'mongodate' => 1], ['unique' => true]);
+        $this->col('anomalies')->createIndex(['mongodate' => 1, 'sid' => 1, 'nid' => 1], ['unique' => true]);
+        $this->col('hwcache')  ->createIndex(['sid' => 1, 'nid' => 1],                   ['unique' => true]);
+
+        # Expire data after some time
+        $this->col('cv_prev')  ->createIndex(["mongodate" => 1], ['expireAfterSeconds' => 60*60*24*$expireDeltaCacheAfter]);
+        $this->col('cv')       ->createIndex(["mongodate" => 1], ['expireAfterSeconds' => 60*60*24*$expireValuesAfterDays]);
+        $this->col('anomalies')->createIndex(["mongodate" => 1], ['expireAfterSeconds' => 60*60*24*$expireAnomaliesAfterDays]);
+    }
 }
