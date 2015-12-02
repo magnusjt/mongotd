@@ -1,8 +1,8 @@
 <?php namespace Mongotd;
 
-use \MongoClient;
-use \MongoDB;
-use \MongoCollection;
+use MongoClient;
+use MongoDB;
+use MongoCollection;
 
 class Connection{
     /** @var  MongoClient */

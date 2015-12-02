@@ -1,18 +1,15 @@
-<?php namespace Mongotd;
+<?php namespace Mongotd\Pipeline;
 
 use DateTime;
 use Exception;
+use Mongotd\Aggregation;
+use Mongotd\Connection;
+use Mongotd\DateTimeHelper;
 use Mongotd\Kpi\AstEvaluator;
 use Mongotd\Kpi\Parser;
-use Mongotd\Pipeline\Find;
-use Mongotd\Pipeline\FindAnomalies;
-use Mongotd\Pipeline\Formula;
-use Mongotd\Pipeline\Pad;
-use Mongotd\Pipeline\Pipeline;
-use Mongotd\Pipeline\RollupSpace;
-use Mongotd\Pipeline\RollupTime;
+use Mongotd\Resolution;
 
-class Retriever{
+class Factory{
     /** @var  Connection */
     private $conn;
 
@@ -39,13 +36,29 @@ class Retriever{
                 new Find($this->conn, $options['sid'], $nid, $start, $end),
                 new RollupTime($resolution, $options['agg'], $padding),
                 new Pad($resolution, $start, $end, $padding)
-            ]);
+            ])->vals;
         });
 
         return new Formula($ast, $astEvaluator);
     }
 
-    public function get(
+    /**
+     * @param string   $sid
+     * @param string   $nid
+     * @param DateTime $start
+     * @param DateTime $end
+     * @param int      $resultResolution
+     * @param int      $resultAggregation
+     * @param bool     $padding
+     * @param int      $nodeResolution
+     * @param int      $singleNodeAggregation
+     * @param int      $combinedNodesAggregation
+     * @param bool     $evaluateAsFormula
+     * @param int      $formulaResolution
+     *
+     * @return array
+     */
+    public function createMultiAction(
         $sid, $nid, DateTime $start, DateTime $end,
         $resultResolution = Resolution::FIFTEEEN_MINUTES,
         $resultAggregation = Aggregation::SUM,
@@ -64,23 +77,23 @@ class Retriever{
             $nid = $nid[0];
         }
 
-        $pipeline = new Pipeline();
         $sequence = [];
-
         if(is_array($nid)){
+            $nidSequence = [];
             foreach($nid as $aNid){
-                $subSequence = [];
+                $singleNidSequence = [];
                 if($evaluateAsFormula){
-                    $subSequence[] = $this->createFormulaAction($sid, $aNid, $start, $end, $formulaResolution, $padding);
+                    $singleNidSequence[] = $this->createFormulaAction($sid, $aNid, $start, $end, $formulaResolution, $padding);
                 }else{
-                    $subSequence[] = new Find($this->conn, $sid, $aNid, $start, $end);
+                    $singleNidSequence[] = new Find($this->conn, $sid, $aNid, $start, $end);
                 }
 
-                $subSequence[] = new RollupTime($nodeResolution, $singleNodeAggregation, $padding);
-                $subSequence[] = new Pad($nodeResolution, $start, $end, $padding);
-                $sequence[] = $subSequence;
+                $singleNidSequence[] = new RollupTime($nodeResolution, $singleNodeAggregation, $padding);
+                $singleNidSequence[] = new Pad($nodeResolution, $start, $end, $padding);
+                $nidSequence[] = $singleNidSequence;
             }
 
+            $sequence[] = $nidSequence;
             $sequence[] = new RollupSpace($combinedNodesAggregation, $padding);
         }else{
             if($evaluateAsFormula){
@@ -93,7 +106,7 @@ class Retriever{
         $sequence[] = new RollupTime($resultResolution, $resultAggregation, $padding);
         $sequence[] = new Pad($resultResolution, $start, $end, $padding);
 
-        return $pipeline->run($sequence)->vals;
+        return $sequence;
     }
 
     /**
@@ -106,11 +119,9 @@ class Retriever{
      *
      * @return array
      */
-    public function getAnomalies(DateTime $start, DateTime $end, array $nids = array(), array $sids = array(), $minCount = 1, $limit = 20){
-        $pipeline = new Pipeline();
-
-        return $pipeline->run([
+    public function createAnomalyAction(DateTime $start, DateTime $end, array $nids = array(), array $sids = array(), $minCount = 1, $limit = 20){
+        return [
             new FindAnomalies($this->conn, $start, $end, $nids, $sids, $minCount, $limit)
-        ]);
+        ];
     }
 }

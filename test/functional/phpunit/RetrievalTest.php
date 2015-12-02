@@ -3,19 +3,21 @@
 use Mongotd\Anomaly;
 use \Mongotd\Connection;
 use Mongotd\CounterValue;
+use Mongotd\Logger;
 use \Mongotd\Mongotd;
+use Mongotd\Pipeline\ConvertToDateStringKeys;
+use Mongotd\Pipeline\Factory;
+use Mongotd\Pipeline\Pipeline;
 use \Mongotd\Resolution;
 use \Mongotd\Aggregation;
+use Mongotd\Storage;
 
 class RetrievalTest extends PHPUnit_Framework_TestCase{
     /** @var  \Mongotd\Connection */
     protected $conn;
-    /** @var  \Mongotd\Mongotd */
-    protected $mongotd;
 
     public function setUp(){
-        $this->conn = new Connection('localhost', 'test', 'test');
-        $this->mongotd = new Mongotd($this->conn);
+        $this->conn = new Connection('127.0.0.1', 'test', 'test');
         $this->conn->db()->drop();
     }
 
@@ -30,19 +32,22 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
         $end = new DateTime('now');
 
         // Group 1
-        $this->conn->col('anomalies')->insert(array('nid' => '1', 'sid' => '1', 'predicted' => 30, 'actual' => 70, 'mongodate' => new MongoDate($start->getTimestamp())));
-        $this->conn->col('anomalies')->insert(array('nid' => '1', 'sid' => '1', 'predicted' => 40, 'actual' => 80, 'mongodate' => new MongoDate($end->getTimestamp())));
-        $this->conn->col('anomalies')->insert(array('nid' => '1', 'sid' => '1', 'predicted' => 45, 'actual' => 85, 'mongodate' => new MongoDate($end->getTimestamp())));
+        $this->conn->col('anomalies')->insert(['nid' => '1', 'sid' => '1', 'predicted' => 30, 'actual' => 70, 'mongodate' => new MongoDate($start->getTimestamp())]);
+        $this->conn->col('anomalies')->insert(['nid' => '1', 'sid' => '1', 'predicted' => 40, 'actual' => 80, 'mongodate' => new MongoDate($end->getTimestamp())]);
+        $this->conn->col('anomalies')->insert(['nid' => '1', 'sid' => '1', 'predicted' => 45, 'actual' => 85, 'mongodate' => new MongoDate($end->getTimestamp())]);
 
         // Group 2
-        $this->conn->col('anomalies')->insert(array('nid' => '2', 'sid' => '1', 'predicted' => 50, 'actual' => 90, 'mongodate' => new MongoDate($start->getTimestamp())));
+        $this->conn->col('anomalies')->insert(['nid' => '2', 'sid' => '1', 'predicted' => 50, 'actual' => 90, 'mongodate' => new MongoDate($start->getTimestamp())]);
 
         // Group 3
-        $this->conn->col('anomalies')->insert(array('nid' => '2', 'sid' => '2', 'predicted' => 60, 'actual' => 100, 'mongodate' => new MongoDate($start->getTimestamp())));
-        $this->conn->col('anomalies')->insert(array('nid' => '2', 'sid' => '2', 'predicted' => 60, 'actual' => 100, 'mongodate' => new MongoDate($end->getTimestamp())));
+        $this->conn->col('anomalies')->insert(['nid' => '2', 'sid' => '2', 'predicted' => 60, 'actual' => 100, 'mongodate' => new MongoDate($start->getTimestamp())]);
+        $this->conn->col('anomalies')->insert(['nid' => '2', 'sid' => '2', 'predicted' => 60, 'actual' => 100, 'mongodate' => new MongoDate($end->getTimestamp())]);
 
-        $retriever = $this->mongotd->getRetriever();
-        $res = $retriever->getAnomalies($start, $end, array('1','2'), array('1','2'), 1, 3);
+        $pipeline = new Pipeline();
+        $pipelineFactory = new Factory($this->conn);
+        $sequence = $pipelineFactory->createAnomalyAction($start, $end, ['1','2'], ['1','2'], 1, 3);
+
+        $res = $pipeline->run($sequence);
 
         $this->assertEquals(3, count($res), 'Expected number of groups were wrong');
         $this->assertEquals(3, count($res[0]['anomalies']), 'Expected number of anomalies in grp1 were wrong');
@@ -68,19 +73,21 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
         $isIncremental = false;
         $padding = false;
 
-        $inserter = $this->mongotd->getInserter();
-        $inserter->setInterval($someResolution);
-        $retriever = $this->mongotd->getRetriever();
+        $storage = new Storage();
+        $storage->setDefaultMiddleware($this->conn, new Logger(null), $someResolution);
+        $pipeline = new Pipeline();
+        $pipelineFactory = new Factory($this->conn);
 
         $expectedValsByDate = array(
             $someDateString => $expectedSum
         );
 
-        $inserter->add($sid1, $someNid, $datetime, $valSid1, $isIncremental);
-        $inserter->add($sid2, $someNid, $datetime, $valSid2, $isIncremental);
-        $inserter->insert();
+        $cvs = [];
+        $cvs[] = new CounterValue($sid1, $someNid, $datetime, $valSid1, $isIncremental);
+        $cvs[] = new CounterValue($sid2, $someNid, $datetime, $valSid2, $isIncremental);
+        $storage->store($cvs);
 
-        $valsByTimestamp = $retriever->get(
+        $sequence = $pipelineFactory->createMultiAction(
             $formula,
             $someNid,
             $datetime,
@@ -94,7 +101,9 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
             true,
             $someFormulaResolution
         );
-        $valsByDate = $retriever->convertToDateStringKeys($valsByTimestamp, $datetime->getTimezone());
+
+        $sequence[] = new ConvertToDateStringKeys();
+        $valsByDate = $pipeline->run($sequence);
 
         $msg = 'Formula test';
         $msg .= "\nExpected\n";
@@ -103,37 +112,5 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
         $msg .= json_encode($valsByDate, JSON_PRETTY_PRINT);
 
         $this->assertTrue($valsByDate === $expectedValsByDate, $msg);
-    }
-
-    public function test_CreateAnomalyStateArray_ResolutionFiveMin_CorrectlyGenerated(){
-        $retriever = $this->mongotd->getRetriever();
-        $anomalies = array(
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:01:23'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:03:23'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:06:15'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:07:01'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:09:01'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:15:01'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:16:00'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:19:00'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:20:00'), 1), 1),
-            new Anomaly(new CounterValue('1', '2', new DateTime('2015-02-20 00:24:59'), 1), 1),
-        );
-        $expectedStates = array(
-            '2015-02-20 00:00:00' => 1,
-            '2015-02-20 00:05:00' => 1,
-            '2015-02-20 00:10:00' => 0,
-            '2015-02-20 00:15:00' => 1,
-            '2015-02-20 00:20:00' => 1,
-            '2015-02-20 00:25:00' => 0,
-        );
-
-        $start = new DateTime('2015-02-20 00:00:00');
-        $end = new DateTime('2015-02-20 00:29:59');
-
-        $statesByTimestamp = $retriever->getAnomalyStates($anomalies, $start, $end, Resolution::FIVE_MINUTES);
-        $statesByDate = $retriever->convertToDateStringKeys($statesByTimestamp, $start->getTimezone());
-
-        $this->assertTrue($statesByDate === $expectedStates);
     }
 }

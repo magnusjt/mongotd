@@ -1,6 +1,5 @@
-<?php namespace Mongotd\StorageMiddleware;
+<?php namespace Mongotd;
 
-use Mongotd\Connection;
 use Psr\Log\LoggerInterface;
 
 class Storage{
@@ -10,13 +9,13 @@ class Storage{
         $this->middleware = $middleware;
     }
 
-    public function setDefaultMiddleware(Connection $conn, LoggerInterface $logger){
+    public function setDefaultMiddleware(Connection $conn, LoggerInterface $logger, $interval = 300){
         $this->middleware = [
-            new FilterCounterValues(),
-            new CalculateDeltas($conn, $logger),
-            new InsertCounterValues($conn, $logger),
-            new FindAnomaliesUsingSigmaTest($conn),
-            new StoreAnomalies($conn)
+            new StorageMiddleware\FilterCounterValues(),
+            new StorageMiddleware\CalculateDeltas($conn, $logger, $interval),
+            new StorageMiddleware\InsertCounterValues($conn),
+            new StorageMiddleware\FindAnomaliesUsingSigmaTest($conn),
+            new StorageMiddleware\StoreAnomalies($conn)
         ];
     }
 

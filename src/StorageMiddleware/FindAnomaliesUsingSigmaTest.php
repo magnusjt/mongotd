@@ -5,8 +5,10 @@ use DateTime;
 use Mongotd\Anomaly;
 use Mongotd\Connection;
 use Mongotd\CounterValue;
+use Mongotd\Pipeline\ConvertToDateStringKeys;
 use Mongotd\Pipeline\FilterWindow;
 use Mongotd\Pipeline\Find;
+use Mongotd\Pipeline\Pad;
 use Mongotd\Pipeline\Pipeline;
 
 /**
@@ -93,12 +95,12 @@ class FindAnomaliesUsingSigmaTest{
     public function getWindowedVals($sid, $nid, DateTime $end, $nDays){
         $start = clone $end;
         $start->sub(DateInterval::createFromDateString($nDays . ' days'));
-        $start->sub(DateInterval::createFromDateString($this->windowLengthInSeconds . ' seconds'));
+        $start->sub(DateInterval::createFromDateString( ($this->windowLengthInSeconds-1) . ' seconds'));
 
         $pipeline = new Pipeline();
         $series = $pipeline->run([
             new Find($this->conn, $sid, $nid, $start, $end),
-            new FilterWindow($start->getTimestamp(), $this->windowLengthInSeconds, 86400)
+            new FilterWindow($start, $this->windowLengthInSeconds, 86400)
         ]);
 
         return array_values($series->vals);

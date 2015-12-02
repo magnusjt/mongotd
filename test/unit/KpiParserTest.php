@@ -1,7 +1,7 @@
 <?php
 
-use \Mongotd\KpiParser;
-use \Mongotd\AstEvaluator;
+use Mongotd\Kpi\AstEvaluator;
+use Mongotd\Kpi\Parser;
 
 class KpiParserTest extends PHPUnit_Framework_TestCase{
 
@@ -31,7 +31,7 @@ class KpiParserTest extends PHPUnit_Framework_TestCase{
      * @param $expectedResult
      */
     public function test_BasicArithmetic_EvaluateAst_MatchExpected($expression, $expectedResult){
-        $parser = new KpiParser();
+        $parser = new Parser();
         $evaluator = new AstEvaluator();
 
         $node = $parser->parse($expression);
@@ -58,7 +58,7 @@ class KpiParserTest extends PHPUnit_Framework_TestCase{
      * @param $expectedResult number
      */
     public function test_variableArithmetic_EvaluateAst_MatchExpected($expression, $expectedResult){
-        $parser = new KpiParser();
+        $parser = new Parser();
         $evaluator = new AstEvaluator();
         $evaluator->setVariableEvaluatorCallback(function($options){
             return $options['val'];
@@ -90,7 +90,7 @@ class KpiParserTest extends PHPUnit_Framework_TestCase{
      * @param $expectedResult number
      */
     public function test_arrayArithmetic_EvaluateAst_MatchExpected($expression, $expectedResult){
-        $parser = new KpiParser();
+        $parser = new Parser();
         $evaluator = new AstEvaluator();
         $evaluator->setVariableEvaluatorCallback(function($options){
             return array(1,2,3);
@@ -126,7 +126,7 @@ class KpiParserTest extends PHPUnit_Framework_TestCase{
      * @param $description string
      */
     public function test_syntaxErrorArithmetic_EvaluateAst_ThrowsException($expression, $description){
-        $parser = new KpiParser();
+        $parser = new Parser();
         $evaluator = new AstEvaluator();
         $evaluator->setVariableEvaluatorCallback(function($options){
             return $options['val'];
@@ -134,7 +134,7 @@ class KpiParserTest extends PHPUnit_Framework_TestCase{
 
         try{
             $parser->parse($expression);
-        }catch(\Exception $e){
+        }catch(Exception $e){
             return;
         }
 

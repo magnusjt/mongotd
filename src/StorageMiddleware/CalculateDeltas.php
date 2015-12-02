@@ -13,18 +13,12 @@ class CalculateDeltas{
     private $logger;
 
     /** @var int  */
-    private $intervalInSeconds = 300;
+    private $interval = 300;
 
-    public function __construct(Connection $conn, LoggerInterface $logger = NULL){
+    public function __construct(Connection $conn, LoggerInterface $logger, $interval = 300){
         $this->conn = $conn;
         $this->logger = $logger;
-    }
-
-    /**
-     * @param int $intervalInSeconds Determines what interval the delta-calc will be scaled for
-     */
-    public function setInterval($intervalInSeconds = 300){
-        $this->intervalInSeconds = $intervalInSeconds;
+        $this->interval = $interval;
     }
 
     /**
@@ -33,18 +27,19 @@ class CalculateDeltas{
      * @return CounterValue[]
      */
     public function run(array $cvs){
-        $cvsDelta = array();
+        $cvsDelta = [];
         $col = $this->conn->col('cv_prev');
 
         foreach($cvs as $cv){
             if(!$cv->incremental){
                 $cvsDelta[] = $cv;
+                continue;
             }
 
             $timestamp = $cv->datetime->getTimestamp();
             $mongodate = new MongoDate($timestamp);
 
-            $doc = $col->findOne(array('sid' => $cv->sid, 'nid' => $cv->nid), array('mongodate' => 1, 'value' => 1));
+            $doc = $col->findOne(['sid' => $cv->sid, 'nid' => $cv->nid], ['mongodate' => 1, 'value' => 1]);
             if($doc){
                 $delta = $this->getDeltaValue($cv->value, $doc['value'], $timestamp, $doc['mongodate']->sec);
                 if($delta !== false){
@@ -53,9 +48,9 @@ class CalculateDeltas{
                 }
             }
 
-            $col->update(array('sid' => $cv->sid, 'nid' => $cv->nid),
-                array('$set' => array('mongodate' => $mongodate, 'value' => $cv->value)),
-                array('upsert' => true));
+            $col->update(['sid' => $cv->sid, 'nid' => $cv->nid],
+                ['$set' => ['mongodate' => $mongodate, 'value' => $cv->value]],
+                ['upsert' => true]);
         }
 
         return $cvsDelta;
@@ -87,11 +82,11 @@ class CalculateDeltas{
             return false;
         }
 
-        if($secondsPast > 6*$this->intervalInSeconds){
+        if($secondsPast > 6*$this->interval){
             $this->logger->debug('Delta-calc failed because more than 6 intervals passed before getting the next value');
             return false;
         }
 
-        return ($value - $valuePrev) * ($this->intervalInSeconds / $secondsPast);
+        return ($value - $valuePrev) * ($this->interval / $secondsPast);
     }
 }

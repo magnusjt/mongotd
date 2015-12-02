@@ -2,32 +2,40 @@
 require __DIR__ . '/../../vendor/autoload.php';
 
 use Mongotd\Connection;
-use Mongotd\Mongotd;
+use Mongotd\CounterValue;
+use Mongotd\Pipeline\Factory;
+use Mongotd\Pipeline\Pipeline;
+use Mongotd\Storage;
+use Mongotd\StorageMiddleware\FilterCounterValues;
+use Mongotd\StorageMiddleware\InsertCounterValues;
 
 $config = json_decode(file_get_contents('retrievalLoadTestConfig.json'), true);
 date_default_timezone_set($config['timezone']);
 $start = new \DateTime($config['starttime']);
 $end = new \DateTime('now');
 $conn = new Connection($config['dbhost'], $config['dbname'], $config['dbprefix']);
-$mongotd = new Mongotd($conn);
 $sid = '1';
 $nid = '1';
-$inserter = $mongotd->getInserter();
-$inserter->setInterval($config['insertIntervalInSeconds']);
-$retriever = $mongotd->getRetriever();
+$pipelineFactory = new Factory($conn);
+$pipeline = new Pipeline();
+$storage = new Storage();
+$storage->addMiddleware(new FilterCounterValues());
+$storage->addMiddleware(new InsertCounterValues($conn));
 
 if($config['doInsertion']){
     $conn->db()->drop();
-    $mongotd->ensureIndexes();
+    $conn->createIndexes();
     $dateperiod = new \DatePeriod($start, DateInterval::createFromDateString($config['insertIntervalInSeconds'] . ' seconds'), $end);
+    $cvs = [];
     foreach($dateperiod as $datetime){
-        $inserter->add($sid, $nid, $datetime, rand(), false);
+        $cvs[] = new CounterValue($sid, $nid, $datetime, rand());
     }
-    $inserter->insert();
+    $storage->store($cvs);
     echo "Insertion done\n";
 }
 
 $timerStart = microtime(true);
-$retriever->get($sid, $nid, $start, $end, $config['retrieveResolution'], $config['retrieveAggregation']);
+$sequence = $pipelineFactory->createMultiAction($sid, $nid, $start, $end, $config['retrieveResolution'], $config['retrieveAggregation']);
+$pipeline->run($sequence);
 $totalTime = (microtime(true) - $timerStart);
 echo 'Retrieved in: ' . $totalTime . " seconds\n";

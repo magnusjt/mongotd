@@ -2,34 +2,61 @@
 require __DIR__ . '/../../vendor/autoload.php';
 date_default_timezone_set('Europe/Oslo');
 
-use \Mongotd\Connection;
-use \Mongotd\Mongotd;
+use Mongotd\Connection;
+use Mongotd\Pipeline\Factory;
+use Mongotd\Pipeline\Pipeline;
+use Mongotd\Storage;
+use Mongotd\StorageMiddleware\FilterCounterValues;
+use Mongotd\StorageMiddleware\InsertCounterValues;
+use Mongotd\StorageMiddleware\FindAnomaliesUsingSigmaTest;
+use Mongotd\StorageMiddleware\FindAnomaliesUsingHwTest;
+use Mongotd\StorageMiddleware\FindAnomaliesUsingKsTest;
+use Mongotd\StorageMiddleware\StoreAnomalies;
 
 $config = json_decode(file_get_contents('anomalyTestConfig.json'), true);
 $conn = new Connection($config['dbhost'], $config['dbname'], $config['dbprefix']);
-$mongotd = new Mongotd($conn);
 $conn->db()->drop();
-$mongotd->ensureIndexes();
-$inserter = $mongotd->getInserter();
-$retriever = $mongotd->getRetriever();
-$signalGenerator = new \Mongotd\SignalGenerator();
-
-$inserter->setInterval($config['insertIntervalInSeconds']);
+$conn->createIndexes();
+$pipelineFactory = new Factory($conn);
+$pipeline = new Pipeline();
+$storage = new Storage();
+$storage->addMiddleware(new FilterCounterValues());
+$storage->addMiddleware(new InsertCounterValues($conn));
 
 if($config['anomalyDetectionMethod'] == 'ks'){
-    $inserter->setAnomalyScanner($mongotd->getAnomalyScannerKs());
+    $storage->addMiddleware(new FindAnomaliesUsingKsTest($conn));
 }else if($config['anomalyDetectionMethod'] == 'hw'){
-    $inserter->setAnomalyScanner($mongotd->getAnomalyScannerHw());
+    $storage->addMiddleware(new FindAnomaliesUsingHwTest($conn));
 }else if($config['anomalyDetectionMethod'] == 'sigma'){
-    $inserter->setAnomalyScanner($mongotd->getAnomalyScanner3Sigma());
+    $storage->addMiddleware(new FindAnomaliesUsingSigmaTest($conn));
 }else{
-    throw new \Exception('Unknown anomaly scan method');
+    throw new Exception('Unknown anomaly scan method');
+}
+$storage->addMiddleware(new StoreAnomalies($conn));
+
+function generateSineDailyPeriodWithNoise($nDays, $interval = 300, $noiseRate = 0.1){
+    $datetimeEnd = new DateTime('now');
+    $datetimeStart = clone $datetimeEnd;
+    $datetimeStart->sub(DateInterval::createFromDateString($nDays . ' days'));
+    $dateperiod = new DatePeriod($datetimeStart, DateInterval::createFromDateString($interval . ' seconds'), $datetimeEnd);
+
+    $series = [];
+    $amplitude = 100;
+    /** @var \DateTime $datetime */
+    foreach($dateperiod as $datetime){
+        $seconds = (int)$datetime->format('H')*60*60 + (int)$datetime->format('i')*60 + (int)$datetime->format('s');
+
+        $signal = $amplitude/2 + ($amplitude/2)*sin(M_PI*2*($seconds)/86400);
+        $signal += $amplitude*$noiseRate*(rand()%1000)/1000; // Random value between -1 and 1, times noise amplitude
+        $series[] = ['datetime' => $datetime, 'value' => $signal];
+    }
+
+    return $series;
 }
 
-$series = $signalGenerator->generateSineDailyPeriodWithNoise($config['nDays'], $config['insertIntervalInSeconds'], $config['noiseRate']);
+$series = generateSineDailyPeriodWithNoise($config['nDays'], $config['insertIntervalInSeconds'], $config['noiseRate']);
 
 $iteration = 1;
-
 $totalAnomalies = 0;
 $totalBoth = 0;
 $hits = 0;
@@ -53,19 +80,22 @@ foreach($series as $data){
         $data['value'] *= 2;
     }
 
-    $inserter->add(1, 1, $data['datetime'], $data['value']);
-    $inserter->insert();
+    $storage->store([
+        new \Mongotd\CounterValue(1, 1, $data['datetime'], $data['value'])
+    ]);
 
     $datetimeStartInterval = clone $data['datetime'];
     $datetimeStartInterval->sub(DateInterval::createFromDateString(($config['insertIntervalInSeconds']-1) . ' seconds'));
-    $anomalies = $retriever->getAnomalies($datetimeStartInterval, $data['datetime']);
 
-    $isAnomaly = count($anomalies) > 0 and count($anomalies[0]['anomalies']) > 0;
+    $sequence = $pipelineFactory->createAnomalyAction($datetimeStartInterval, $data['datetime']);
+    $anomalyList = $pipeline->run($sequence);
+
+    $isAnomaly = count($anomalyList) > 0 and count($anomalyList[0]['anomalies']) > 0;
 
     if($isAnomaly or $expectedAnomaly){
         echo $data['datetime']->format('Y-m-d H:i') . ' - ' . $data['value'];
         if($isAnomaly){
-            echo ' Detected anomaly! (predicted avg ' . $anomalies[0]['anomalies'][0]->predicted . ')';
+            echo ' Detected anomaly! (predicted avg ' . $anomalyList[0]['anomalies'][0]->predicted . ')';
         }
         if($expectedAnomaly){
             echo ' Actual anomaly!';

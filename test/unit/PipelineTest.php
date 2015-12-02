@@ -19,7 +19,7 @@ class PipelineTest extends PHPUnit_Framework_TestCase{
         $this->find = $this->getMockBuilder('Mongotd\Pipeline\Find')->disableOriginalConstructor()->getMock();
     }
 
-    public function basicPipelineProvider(){
+    public function rollupTimeAndPadProvider(){
         return [
             [
                 [
@@ -29,6 +29,7 @@ class PipelineTest extends PHPUnit_Framework_TestCase{
                     'aggregation' => Aggregation::SUM,
                     'start' => '2015-10-25 00:00:00',
                     'end' => '2015-10-26 00:00:00',
+                    'padding' => false,
                     'vals' => [
                         '2015-10-25 00:00:00' => 100,
                         '2015-10-25 00:05:00' => 100,
@@ -44,15 +45,33 @@ class PipelineTest extends PHPUnit_Framework_TestCase{
                     ]
                 ]
             ],
+            [
+                [
+                    'description' => 'Time range outside time where values exist, insert random vals, retrieve daily sum and padded',
+                    'timezone' => 'Europe/Oslo',
+                    'resolution' => Resolution::DAY,
+                    'aggregation' => Aggregation::SUM,
+                    'start' => '2015-10-26 00:00:00',
+                    'end' => '2015-10-28 00:00:00',
+                    'padding' => false,
+                    'vals' => [
+                        '2015-10-26 00:00:00' => 100,
+                    ],
+                    'expected' => [
+                        '2015-10-26 00:00:00' => 100,
+                        '2015-10-27 00:00:00' => false
+                    ]
+                ]
+            ],
         ];
     }
 
     /**
-     * @dataProvider basicPipelineProvider
+     * @dataProvider rollupTimeAndPadProvider
      *
      * @param $config
      */
-    public function test_BasicPipeline($config){
+    public function test_RollupTimeAndPad($config){
         date_default_timezone_set($config['timezone']);
 
         $vals = [];
@@ -67,56 +86,11 @@ class PipelineTest extends PHPUnit_Framework_TestCase{
         $pipeline = new Pipeline();
         $output = $pipeline->run([
             $find,
-            new RollupTime($config['resolution'], $config['aggregation'], false),
-            new Pad($config['resolution'], new DateTime($config['start']), new DateTime($config['end']), false),
+            new RollupTime($config['resolution'], $config['aggregation'], $config['padding']),
+            new Pad($config['resolution'], new DateTime($config['start']), new DateTime($config['end']), $config['padding']),
             new ConvertToDateStringKeys()
         ]);
 
         $this->assertEquals($config['expected'], $output);
-    }
-
-    public function test_FormulaPipeline(){
-        $formula = '[sid=0] + [sid=1] + 5';
-        $vals1 = [
-            (new DateTime('2015-12-05 00:00:00'))->getTimestamp() => 100,
-            (new DateTime('2015-12-05 01:00:00'))->getTimestamp() => 200,
-        ];
-        $vals2 = [
-            (new DateTime('2015-12-05 00:00:00'))->getTimestamp() => 1000,
-            (new DateTime('2015-12-05 01:00:00'))->getTimestamp() => 2000,
-        ];
-        $expected = [
-            '2015-12-05 00:00:00' => 1105,
-            '2015-12-05 01:00:00' => 2205,
-        ];
-
-        $seriesList = [];
-        $seriesList[] = new Series($vals1);
-        $seriesList[] = new Series($vals2);
-
-        $parser = new Parser();
-        $ast = $parser->parse($formula);
-
-        $astEvaluator = new AstEvaluator();
-        $astEvaluator->setPaddingValue(false);
-        $astEvaluator->setVariableEvaluatorCallback(function($options) use($seriesList){
-            $find = $this->getMockBuilder('Mongotd\Pipeline\Find')->disableOriginalConstructor()->getMock();
-
-            $series = $seriesList[$options['sid']];
-            $find->method('run')->willReturn($series);
-
-            $pipeline = new Pipeline();
-            return $pipeline->run([
-                $find
-            ])->vals;
-        });
-
-        $pipeline = new Pipeline();
-        $output = $pipeline->run([
-            new Formula($ast, $astEvaluator),
-            new ConvertToDateStringKeys()
-        ]);
-
-        $this->assertEquals($expected, $output);
     }
 }

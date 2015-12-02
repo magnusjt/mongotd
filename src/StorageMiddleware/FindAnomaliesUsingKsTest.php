@@ -31,7 +31,7 @@ class FindAnomaliesUsingKsTest{
     private $minCurrDataPoints = 1;
 
     /** @var int  */
-    private $windowLengthInSeconds = 900;
+    private $windowLengthInSeconds = 7200;
 
     /** @var float  */
     private $dTreshold = 0.2;
@@ -98,12 +98,12 @@ class FindAnomaliesUsingKsTest{
     public function getWindowedVals($sid, $nid, DateTime $end, $nDays){
         $start = clone $end;
         $start->sub(DateInterval::createFromDateString($nDays . ' days'));
-        $start->sub(DateInterval::createFromDateString($this->windowLengthInSeconds . ' seconds'));
+        $start->sub(DateInterval::createFromDateString( ($this->windowLengthInSeconds-1) . ' seconds'));
 
         $pipeline = new Pipeline();
         $series = $pipeline->run([
             new Find($this->conn, $sid, $nid, $start, $end),
-            new FilterWindow($start->getTimestamp(), $this->windowLengthInSeconds, 86400)
+            new FilterWindow($start, $this->windowLengthInSeconds, 86400)
         ]);
 
         return array_values($series->vals);

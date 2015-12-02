@@ -2,12 +2,12 @@
 require(__DIR__ . '/../../../vendor/autoload.php');
 date_default_timezone_set('Europe/Oslo');
 
-use \Mongotd\Connection;
-use Mongotd\FlotFormatter;
-use Mongotd\FlotLoader;
-use \Mongotd\Mongotd;
-use \Mongotd\Resolution;
-use \Mongotd\Aggregation;
+use Mongotd\Connection;
+use Mongotd\DateTimeHelper;
+use Mongotd\Resolution;
+use Mongotd\Aggregation;
+use Mongotd\Pipeline\Factory;
+use Mongotd\Pipeline\Pipeline;
 
 set_error_handler(function($errno, $errstr, $errfile, $errline, array $errcontext){
     header($_SERVER['SERVER_PROTOCOL'] . ' 500 Internal Server Error', true, 500);
@@ -56,14 +56,14 @@ function resolutionStrToEnum($resolution){
     throw new Exception('Invalid resolution');
 }
 
-$conn = new Connection('localhost', 'test', 'test');
-$mongotd = new Mongotd($conn, null);
-$retriever = $mongotd->getRetriever();
+$conn = new Connection('127.0.0.1', 'test', 'test');
+$pipelineFactory = new Factory($conn);
+$pipeline = new Pipeline();
 
 $asFormula = false;
 $nids = array(1,2);
 $sids = array(1,2);
-$start = "-20 days";
+$start = "-60 days";
 $end = "now";
 $aggregation = Aggregation::SUM;
 $resolution = Resolution::HOUR;
@@ -93,8 +93,10 @@ if(isset($_GET['formulaResolution'])) $formulaResolution = resolutionStrToEnum($
 $flotData = array();
 $start = new DateTime($start);
 $end = new DateTime($end);
+DateTimeHelper::normalizeTimeRange($start, $end, $resolution);
+
 foreach($sids as $sid){
-    $valsByTimestamp = $retriever->get(
+    $sequence = $pipelineFactory->createMultiAction(
         $sid,
         $nids,
         $start,
@@ -108,10 +110,12 @@ foreach($sids as $sid){
         $asFormula,
         $formulaResolution
     );
+    $series = $pipeline->run($sequence);
+
     $data = array_map(function($timestamp, $value){
         $value===false?$value=null:$value; // Flot required 'null' to be the value if no value is present
         return array($timestamp*1000, $value);
-    }, array_keys($valsByTimestamp), $valsByTimestamp);
+    }, array_keys($series->vals), $series->vals);
 
     $flotData[] = array(
         'data' => $data,
@@ -121,12 +125,19 @@ foreach($sids as $sid){
     );
 }
 
-$res = $retriever->getAnomalies($start, $end, $nids, $sids, 0, count($nids)*count($nids));
+$sequence = $pipelineFactory->createAnomalyAction($start, $end, $nids, $sids, 0, count($nids)*count($nids));
+$sequence[] = new \Mongotd\Pipeline\AddAnomalyState($start, $end, $resolution);
+$res = $pipeline->run($sequence);
+
+$anomalyStates = [];
 $anomalies = array();
 foreach($res as $row){
     $anomalies = array_merge($anomalies, $row['anomalies']);
+    foreach($row['state'] as $timestamp => $state){
+        $anomalyStates[$timestamp] = $state;
+    }
 }
-$anomalyStates = $retriever->getAnomalyStates($anomalies, $start, $end, $resolution);
+
 $data = array_map(function($timestamp, $value){
     return array($timestamp*1000, $value);
 }, array_keys($anomalyStates), $anomalyStates);

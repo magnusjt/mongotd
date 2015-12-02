@@ -10,25 +10,8 @@ class InsertCounterValues{
     /** @var  Connection */
     private $conn;
 
-    /** @var  LoggerInterface */
-    private $logger;
-
-    /** @var int */
-    private $intervalInSeconds = 300;
-
-    /** @var int  */
-    private $secondsInADay = 86400;
-
-    public function __construct(Connection $conn, LoggerInterface $logger){
+    public function __construct(Connection $conn){
         $this->conn = $conn;
-        $this->logger = $logger;
-    }
-
-    /**
-     * @param int $intervalInSeconds Determines how many value-slots are preallocated
-     */
-    public function setInterval($intervalInSeconds = 300){
-        $this->intervalInSeconds = $intervalInSeconds;
     }
 
     /**
@@ -37,22 +20,26 @@ class InsertCounterValues{
      * @return CounterValue[]
      */
     public function run(array $cvs){
+        if(count($cvs) == 0){
+            return $cvs;
+        }
+
         $col = $this->conn->col('cv');
         $batchUpdate = new MongoUpdateBatch($col);
 
         foreach($cvs as $cv){
             $timestamp = $cv->datetime->getTimestamp();
-            $secondsIntoThisDay = $timestamp%$this->secondsInADay;
+            $secondsIntoThisDay = $timestamp%86400;
             $mongodate = new MongoDate($timestamp - $secondsIntoThisDay);
 
-            $secondsClampedToInterval = $secondsIntoThisDay - $secondsIntoThisDay%$this->intervalInSeconds;
-            $batchUpdate->add(array(
-                'q' => array('sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate),
-                'u' => array('$set' => array('vals.' . $secondsClampedToInterval => $cv->value))
-            ));
+            $batchUpdate->add([
+                'q' => ['sid' => $cv->sid, 'nid' => $cv->nid, 'mongodate' => $mongodate],
+                'u' => ['$set' => ['vals.' . $secondsIntoThisDay => $cv->value]],
+                'upsert' => true
+            ]);
         }
 
-        $batchUpdate->execute(array('w' => 1));
+        $batchUpdate->execute(['w' => 1]);
         return $cvs;
     }
 }

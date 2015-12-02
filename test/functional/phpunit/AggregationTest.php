@@ -1,19 +1,22 @@
 <?php
 
 use \Mongotd\Connection;
+use Mongotd\CounterValue;
+use Mongotd\Logger;
 use \Mongotd\Mongotd;
+use Mongotd\Pipeline\ConvertToDateStringKeys;
+use Mongotd\Pipeline\Factory;
+use Mongotd\Pipeline\Pipeline;
 use \Mongotd\Resolution;
 use \Mongotd\Aggregation;
+use Mongotd\Storage;
 
 class AggregationTest extends PHPUnit_Framework_TestCase{
     /** @var  \Mongotd\Connection */
     protected $conn;
-    /** @var  \Mongotd\Mongotd */
-    protected $mongotd;
 
     public function setUp(){
-        $this->conn = new Connection('localhost', 'test', 'test');
-        $this->mongotd = new Mongotd($this->conn);
+        $this->conn = new Connection('127.0.0.1', 'test', 'test');
         $this->conn->db()->drop();
     }
 
@@ -34,6 +37,24 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
                     'end' => '2015-02-28 23:59:59',
                     'expected' => array(
                         '2015-02-28 00:00:00' => 1*24
+                    )
+                )
+            ),
+            array(
+                array(
+                    'description' => 'One day including daylight savings, insert hourly, retrieve daily sum',
+                    'timezone' => 'Europe/Oslo',
+                    'retrieveResolution' => Resolution::DAY,
+                    'insertResolution' => Resolution::HOUR,
+                    'aggregation' => Aggregation::SUM,
+                    'nid' => 1,
+                    'sid' => 1,
+                    'val' => 1,
+                    'incremental' => false,
+                    'start' => '2015-10-25 00:00:00',
+                    'end' => '2015-10-25 23:59:59',
+                    'expected' => array(
+                        '2015-10-25 00:00:00' => 1*24
                     )
                 )
             ),
@@ -155,21 +176,26 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
      * @param $config
      */
     public function test_Aggregate_ExpectedEqualsRetrieved($config){
+        date_default_timezone_set($config['timezone']);
         $timezone = new DateTimeZone($config['timezone']);
         $start = new DateTime($config['start'], $timezone);
         $end = new DateTime($config['end'], $timezone);
-        $inserter = $this->mongotd->getInserter();
-        $inserter->setInterval($config['insertResolution']);
-        $retriever = $this->mongotd->getRetriever();
+        $storage = new Storage();
+        $storage->setDefaultMiddleware($this->conn, new Logger(null));
+        $pipelineFactory = new Factory($this->conn);
+        $pipeline = new Pipeline();
 
+        $cvs = [];
         $dateperiod = new DatePeriod($start, DateInterval::createFromDateString($config['insertResolution'] . ' seconds'), $end);
         foreach($dateperiod as $datetime){
-            $inserter->add($config['sid'], $config['nid'], $datetime, $config['val'], $config['incremental']);
+            $cvs[] = new CounterValue($config['sid'], $config['nid'], $datetime, $config['val'], $config['incremental']);
         }
-        $inserter->insert();
+        $storage->store($cvs);
 
-        $valsByTimestamp = $retriever->get($config['sid'], $config['nid'], $start, $end, $config['retrieveResolution'], $config['aggregation']);
-        $valsByDate = $retriever->convertToDateStringKeys($valsByTimestamp, $start->getTimezone());
+        $sequence = $pipelineFactory->createMultiAction($config['sid'], $config['nid'], $start, $end, $config['retrieveResolution'], $config['aggregation']);
+        $sequence[] = new ConvertToDateStringKeys();
+        $valsByDate = $pipeline->run($sequence);
+
         $msg = $config['description'];
         $msg .= "\nExpected\n";
         $msg .= json_encode($config['expected'], JSON_PRETTY_PRINT);

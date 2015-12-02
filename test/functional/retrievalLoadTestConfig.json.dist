@@ -1,6 +1,6 @@
 {
   "timezone":                "Europe/Oslo",
-  "dbhost":                  "localhost",
+  "dbhost":                  "127.0.0.1",
   "dbname":                  "test",
   "dbprefix":                "test",
   "doInsertion":             false,

@@ -27,11 +27,12 @@ class AddAnomalyState{
         foreach($anomalies as $anomaly){
             $statesByTimestamp[$anomaly->cv->datetime->getTimestamp()] = 1;
         }
+        $series = new Series($statesByTimestamp);
 
         $pipeline = new Pipeline();
         return $pipeline->run([
             new RollupTime($this->resolution, Aggregation::MAX),
             new Pad($this->resolution, $this->start, $this->end, 0)
-        ]);
+        ], $series)->vals;
     }
 }
