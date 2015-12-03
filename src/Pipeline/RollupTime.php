@@ -2,6 +2,10 @@
 
 use Mongotd\Aggregation;
 
+/**
+ * This pipe takes a series and rolls up / aggregates to a certain resolution.
+ * Alternatively, it takes a list of series, and rolls up each of them separately.
+ */
 class RollupTime{
     public $resolution;
 

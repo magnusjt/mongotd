@@ -25,8 +25,8 @@ $pipelineFactory = new Factory($conn);
 $pipeline = new Pipeline();
 $storage = new Storage();
 $storage->addMiddleware(new FilterCounterValues());
-$storage->addMiddleware(new InsertCounterValues($conn));
 $storage->addMiddleware(new CalculateDeltas($conn, new Logger(null), $config['insertIntervalInSeconds']));
+$storage->addMiddleware(new InsertCounterValues($conn));
 
 if($config['anomalyDetectionMethod'] == 'ks'){
     $storage->addMiddleware(new FindAnomaliesUsingKsTest($conn));

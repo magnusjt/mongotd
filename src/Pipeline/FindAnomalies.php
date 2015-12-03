@@ -7,12 +7,19 @@ use Mongotd\Anomaly;
 use Mongotd\Connection;
 use Mongotd\CounterValue;
 
+/**
+ * Entry point for finding a set of anomalies.
+ * The output is a bit special, and requires
+ * custom handling.
+ */
 class FindAnomalies{
     public $conn;
     public $matchObject;
+    public $timezone;
 
     public function __construct(Connection $conn, DateTime $start, DateTime $end, array $nids = array(), array $sids = array(), $minCount = 1, $limit = 20){
         $this->conn = $conn;
+        $this->timezone = new DateTimeZone(date_default_timezone_get());
 
         foreach($nids as &$nid){
             $nid = (string)$nid;
@@ -77,7 +84,6 @@ class FindAnomalies{
 
     public function run(){
         $res = $this->conn->col('anomalies')->aggregate($this->matchObject);
-        $timezone = new DateTimeZone(date_default_timezone_get());
 
         $result = [];
         foreach($res['result'] as $doc){
@@ -89,7 +95,7 @@ class FindAnomalies{
             foreach($doc['anomalies'] as $subdoc){
                 $timestamp = $subdoc['mongodate']->sec;
                 $datetime = new DateTime('@'.$timestamp);
-                $datetime->setTimezone($timezone);
+                $datetime->setTimezone($this->timezone);
                 $cv = new CounterValue($sid, $nid, $datetime, $subdoc['actual']);
                 $anomalies[] = new Anomaly($cv, $subdoc['predicted']);
             }

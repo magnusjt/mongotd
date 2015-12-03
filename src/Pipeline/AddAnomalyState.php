@@ -3,6 +3,16 @@
 use DateTime;
 use Mongotd\Aggregation;
 
+/**
+ * This pipe takes input as given by the FindAnomalies pipe.
+ * It looks at each list of anomalies, and creates a
+ * state list based on them. The state list is a
+ * series of 0's and 1's, indicating anomalies.
+ * At the same time, the list is rolled up in
+ * time, so any anomaly in a given interval
+ * will result in an anomaly for the entire
+ * interval.
+ */
 class AddAnomalyState{
     public $start;
     public $end;

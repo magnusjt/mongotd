@@ -2,6 +2,14 @@
 
 use Mongotd\CounterValue;
 
+/**
+ * This class makes sure that every counter value
+ * is in fact a number, and converts the values to
+ * actual ints or floats.
+ *
+ * In addition, it casts nid/sid to string to make
+ * sure we store them in a consistent way.
+ */
 class FilterCounterValues{
     /**
      * @param $cvs CounterValue[]

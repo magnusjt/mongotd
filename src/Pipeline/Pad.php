@@ -1,7 +1,14 @@
 <?php namespace Mongotd\Pipeline;
 
+use DateInterval;
+use DatePeriod;
 use DateTime;
 
+/**
+ * Normalize a series so it contains data points
+ * according to the intended resolution and time range.
+ * If no value exists at a given point, use a dummy pad value instead.
+ */
 class Pad{
     public $resolution;
     public $start;
@@ -14,7 +21,7 @@ class Pad{
         $this->start = $start;
         $this->end = $end;
         $this->padding = $padding;
-        $this->dateperiod = new \DatePeriod($start, \DateInterval::createFromDateString($resolution.' seconds'), $end);
+        $this->dateperiod = new DatePeriod($start, DateInterval::createFromDateString($resolution.' seconds'), $end);
     }
 
     /**

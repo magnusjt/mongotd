@@ -2,6 +2,11 @@
 
 use Mongotd\Aggregation;
 
+/**
+ * This pipe takes a list of series, and merges them using the specified aggregation.
+ * It requires that the timestamp keys in each subseries are the same,
+ * so each subseries should be rolled up in time and padded first.
+ */
 class RollupSpace{
     public $aggregation;
 

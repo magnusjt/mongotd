@@ -4,6 +4,8 @@ date_default_timezone_set('Europe/Oslo');
 
 use Mongotd\Connection;
 use Mongotd\DateTimeHelper;
+use Mongotd\Pipeline\AddAnomalyState;
+use Mongotd\Pipeline\ConvertToFlotFormat;
 use Mongotd\Resolution;
 use Mongotd\Aggregation;
 use Mongotd\Pipeline\Factory;
@@ -110,12 +112,8 @@ foreach($sids as $sid){
         $asFormula,
         $formulaResolution
     );
-    $series = $pipeline->run($sequence);
-
-    $data = array_map(function($timestamp, $value){
-        $value===false?$value=null:$value; // Flot required 'null' to be the value if no value is present
-        return array($timestamp*1000, $value);
-    }, array_keys($series->vals), $series->vals);
+    $sequence[] = new ConvertToFlotFormat();
+    $data = $pipeline->run($sequence);
 
     $flotData[] = array(
         'data' => $data,
@@ -126,7 +124,7 @@ foreach($sids as $sid){
 }
 
 $sequence = $pipelineFactory->createAnomalyAction($start, $end, $nids, $sids, 0, count($nids)*count($nids));
-$sequence[] = new \Mongotd\Pipeline\AddAnomalyState($start, $end, $resolution);
+$sequence[] = new AddAnomalyState($start, $end, $resolution);
 $res = $pipeline->run($sequence);
 
 $anomalyStates = [];

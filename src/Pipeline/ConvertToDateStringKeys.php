@@ -3,6 +3,11 @@
 use DateTime;
 use DateTimeZone;
 
+/**
+ * Helper pipe for converting the timestamps
+ * in a series to datetime strings.
+ * It makes testing a lot easier.
+ */
 class ConvertToDateStringKeys{
     public $datetimeZone;
 

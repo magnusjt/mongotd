@@ -11,7 +11,7 @@ use \Mongotd\Resolution;
 use \Mongotd\Aggregation;
 use Mongotd\Storage;
 
-class AggregationTest extends PHPUnit_Framework_TestCase{
+class UseCaseTest extends PHPUnit_Framework_TestCase{
     /** @var  \Mongotd\Connection */
     protected $conn;
 
@@ -20,7 +20,7 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
         $this->conn->db()->drop();
     }
 
-    public function aggregationTestProvider(){
+    public function useCases(){
         return array(
             array(
                 array(
@@ -171,11 +171,11 @@ class AggregationTest extends PHPUnit_Framework_TestCase{
     }
 
     /**
-     * @dataProvider aggregationTestProvider
+     * @dataProvider useCases
      *
      * @param $config
      */
-    public function test_Aggregate_ExpectedEqualsRetrieved($config){
+    public function test_UseCase($config){
         date_default_timezone_set($config['timezone']);
         $timezone = new DateTimeZone($config['timezone']);
         $start = new DateTime($config['start'], $timezone);

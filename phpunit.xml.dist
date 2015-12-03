@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit
-        bootstrap="./test/phpunit_bootstrap.php"
+        bootstrap="./test/bootstrap.php"
 
         backupStaticAttributes="false"
 
@@ -20,16 +20,12 @@
         stopOnSkipped="false"
         testSuiteLoaderClass="PHPUnit_Runner_StandardTestSuiteLoader"
 
-        strict="false"
         verbose="false"
         >
 
     <testsuites>
         <testsuite name="unit">
-            <directory>./test/unit</directory>
-        </testsuite>
-        <testsuite name="functional">
-            <directory>./test/functional/phpunit</directory>
+            <directory>./test/phpunit</directory>
         </testsuite>
     </testsuites>
 </phpunit>

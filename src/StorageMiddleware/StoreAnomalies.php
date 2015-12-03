@@ -4,6 +4,10 @@ use MongoDate;
 use Mongotd\Anomaly;
 use Mongotd\Connection;
 
+/**
+ * After anomaly detection has been run,
+ * this class is used to store the resulting anomalies.
+ */
 class StoreAnomalies{
     public $conn;
 

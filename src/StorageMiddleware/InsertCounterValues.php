@@ -6,6 +6,16 @@ use Psr\Log\LoggerInterface;
 use MongoDate;
 use MongoUpdateBatch;
 
+/**
+ * Inserts a list of CounterValue into the database.
+ * There is one document per nid per sid per day.
+ * This document is updated with new values as we
+ * go along.
+ *
+ * There is no pre-allocation, as we assume the
+ * WiredTiger storage engine, where pre-allocation
+ * is not helpful.
+ */
 class InsertCounterValues{
     /** @var  Connection */
     private $conn;

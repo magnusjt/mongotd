@@ -9,6 +9,9 @@ use Mongotd\Kpi\AstEvaluator;
 use Mongotd\Kpi\Parser;
 use Mongotd\Resolution;
 
+/**
+ * Helper class for creating different kinds of pipeline sequences
+ */
 class Factory{
     /** @var  Connection */
     private $conn;

@@ -93,6 +93,8 @@ class FindAnomaliesUsingSigmaTest{
     }
 
     public function getWindowedVals($sid, $nid, DateTime $end, $nDays){
+        // Set STARTTIME = ENDTIME - DAYS - WINDOWLENGTH + 1
+        // NB: Each window includes 0...N-1. We want to include the ending (N), so start at 1 instead of 0.
         $start = clone $end;
         $start->sub(DateInterval::createFromDateString($nDays . ' days'));
         $start->sub(DateInterval::createFromDateString( ($this->windowLengthInSeconds-1) . ' seconds'));

@@ -7,6 +7,8 @@ class FilterWindow{
     public $start;
     public $windowLength;
     public $distance;
+    public $dateIntervalDistance;
+    public $dateIntervalWindowLength;
 
     /**
      * @param $start        DateTime First window
@@ -17,27 +19,33 @@ class FilterWindow{
         $this->start = $start;
         $this->windowLength = $windowLength;
         $this->distance = $distance;
+        $this->dateIntervalDistance = DateInterval::createFromDateString($this->distance.' seconds');
+        $this->dateIntervalWindowLength = DateInterval::createFromDateString($this->windowLength.' seconds');
     }
 
     public function run(Series $series){
         $vals = [];
-        $distanceInterval = DateInterval::createFromDateString($this->distance.' seconds');
-        $windowInterval = DateInterval::createFromDateString($this->windowLength.' seconds');
         $start = clone $this->start;
-        $end = clone $start;
-        $end->add($windowInterval);
+        $end = clone $this->start;
+        $end->add($this->dateIntervalWindowLength);
         $tsStart = $start->getTimestamp();
         $tsEnd = $end->getTimestamp();
 
         foreach($series->vals as $timestamp => $value){
-            if($timestamp >= $tsEnd){
-                $start->add($distanceInterval);
-                $end->add($distanceInterval);
+            // Step 1. Move input forward if it's before the current window
+            if($timestamp < $tsStart){
+                continue;
+            }
+
+            // Step 2. Move window forward if it's before the current input
+            while($timestamp >= $tsEnd){
+                $start->add($this->dateIntervalDistance);
+                $end->add($this->dateIntervalDistance);
                 $tsStart = $start->getTimestamp();
                 $tsEnd = $end->getTimestamp();
             }
 
-            if($timestamp >= $tsStart && $timestamp < $tsEnd){
+            if($timestamp >= $tsStart){
                 $vals[$timestamp] = $value;
             }
         }

@@ -1,18 +1,10 @@
 <?php
 
-use Mongotd\Anomaly;
-use \Mongotd\Connection;
-use Mongotd\CounterValue;
-use Mongotd\Logger;
-use \Mongotd\Mongotd;
-use Mongotd\Pipeline\ConvertToDateStringKeys;
+use Mongotd\Connection;
 use Mongotd\Pipeline\Factory;
 use Mongotd\Pipeline\Pipeline;
-use \Mongotd\Resolution;
-use \Mongotd\Aggregation;
-use Mongotd\Storage;
 
-class RetrievalTest extends PHPUnit_Framework_TestCase{
+class AnomalyRetrievalTest extends PHPUnit_Framework_TestCase{
     /** @var  \Mongotd\Connection */
     protected $conn;
 
@@ -53,64 +45,5 @@ class RetrievalTest extends PHPUnit_Framework_TestCase{
         $this->assertEquals(3, count($res[0]['anomalies']), 'Expected number of anomalies in grp1 were wrong');
         $this->assertEquals(2, count($res[1]['anomalies']), 'Expected number of anomalies in grp3 were wrong');
         $this->assertEquals(1, count($res[2]['anomalies']), 'Expected number of anomalies in grp2 were wrong');
-    }
-
-    public function test_StoreValues_RetrieveAsFormula_FormulaIsCorrectlyCalculated(){
-        $formula = '[sid=1,agg=1] + [sid=2,agg=1]';
-
-        $sid1 = 1;
-        $sid2 = 2;
-        $someNid = 1;
-        $valSid1 = 15;
-        $valSid2 = 30;
-        $expectedSum = $valSid1 + $valSid2;
-        $someDateString = '2015-02-18 15:00:00';
-        $datetime = new DateTime($someDateString);
-        $someFormulaResolution = Resolution::FIVE_MINUTES;
-        $someResultResolution = Resolution::FIVE_MINUTES;
-        $sumResultAggregation = Aggregation::SUM;
-        $someResolution = Resolution::FIVE_MINUTES;
-        $isIncremental = false;
-        $padding = false;
-
-        $storage = new Storage();
-        $storage->setDefaultMiddleware($this->conn, new Logger(null), $someResolution);
-        $pipeline = new Pipeline();
-        $pipelineFactory = new Factory($this->conn);
-
-        $expectedValsByDate = array(
-            $someDateString => $expectedSum
-        );
-
-        $cvs = [];
-        $cvs[] = new CounterValue($sid1, $someNid, $datetime, $valSid1, $isIncremental);
-        $cvs[] = new CounterValue($sid2, $someNid, $datetime, $valSid2, $isIncremental);
-        $storage->store($cvs);
-
-        $sequence = $pipelineFactory->createMultiAction(
-            $formula,
-            $someNid,
-            $datetime,
-            $datetime,
-            $someResultResolution,
-            $sumResultAggregation,
-            $padding,
-            null,
-            null,
-            null,
-            true,
-            $someFormulaResolution
-        );
-
-        $sequence[] = new ConvertToDateStringKeys();
-        $valsByDate = $pipeline->run($sequence);
-
-        $msg = 'Formula test';
-        $msg .= "\nExpected\n";
-        $msg .= json_encode($expectedValsByDate, JSON_PRETTY_PRINT);
-        $msg .= "\nActual:\n";
-        $msg .= json_encode($valsByDate, JSON_PRETTY_PRINT);
-
-        $this->assertTrue($valsByDate === $expectedValsByDate, $msg);
     }
 }

@@ -2,6 +2,13 @@
 
 use Mongotd\Kpi\AstEvaluator;
 
+/**
+ * Entry pipe which finds values based on a formula.
+ * Everything to do with the formula itself, and the
+ * way it gets its data is outside of this class.
+ *
+ * @see Mongotd\Kpi\Parser
+ */
 class Formula{
     public $ast;
     public $astEvaluator;

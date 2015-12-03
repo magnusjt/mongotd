@@ -5,6 +5,12 @@ use DateTimeZone;
 use MongoDate;
 use Mongotd\Connection;
 
+/**
+ * Entry pipe for finding values from database.
+ * It rounds the time range to the date values,
+ * so make sure to normalize time range before,
+ * and normalize values after.
+ */
 class Find{
     /** @var  Connection */
     private $conn;

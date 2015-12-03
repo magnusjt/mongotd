@@ -42,12 +42,13 @@ function generateSineDailyPeriodWithNoise($nDays, $interval = 300, $noiseRate = 
 
     $series = [];
     $amplitude = 100;
+    $noiseAmplitude = $amplitude*$noiseRate;
     /** @var \DateTime $datetime */
     foreach($dateperiod as $datetime){
         $seconds = (int)$datetime->format('H')*60*60 + (int)$datetime->format('i')*60 + (int)$datetime->format('s');
 
         $signal = $amplitude/2 + ($amplitude/2)*sin(M_PI*2*($seconds)/86400);
-        $signal += $amplitude*$noiseRate*(rand()%1000)/1000; // Random value between -1 and 1, times noise amplitude
+        $signal += $noiseAmplitude*( (rand()%2000) - 1000)/1000; // Random value between -1 and 1, times noise amplitude
         $series[] = ['datetime' => $datetime, 'value' => $signal];
     }
 
@@ -58,7 +59,6 @@ $series = generateSineDailyPeriodWithNoise($config['nDays'], $config['insertInte
 
 $iteration = 1;
 $totalAnomalies = 0;
-$totalBoth = 0;
 $hits = 0;
 $misses = 0;
 $falsesPositives = 0;
@@ -101,7 +101,6 @@ foreach($series as $data){
             echo ' Actual anomaly!';
         }
 
-        $totalBoth++;
         if($isAnomaly and $expectedAnomaly){
             $hits++;
         }else if($isAnomaly){
@@ -116,5 +115,5 @@ foreach($series as $data){
 
 echo 'Hits: ' . $hits . ' (rate: ' . ($hits/$totalAnomalies) . ")\n";
 echo 'Misses: ' . $misses . ' (rate: ' . ($misses/$totalAnomalies) . ")\n";
-echo 'False positive: ' . $falsesPositives . ' (rate: ' . ($falsesPositives/$totalBoth) . ")\n";
+echo 'False positive: ' . $falsesPositives . ' (rate: ' . ($falsesPositives/($hits+$falsesPositives)) . ")\n";
 

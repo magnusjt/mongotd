@@ -5,6 +5,26 @@ use Mongotd\CounterValue;
 use Psr\Log\LoggerInterface;
 use MongoDate;
 
+/**
+ * This class makes sure that every counter value that is
+ * of incremental type is delta-calculated.
+ *
+ * The delta-calculation assumes that values are
+ * always increasing. Therefore, we discard
+ * any negative results.
+ *
+ * The delta values indicate rate-of-change,
+ * so to have consistent values we need to
+ * scale according to a set time interval.
+ * E.g.: Change per 5 minutes => interval = 300 seconds
+ *
+ * Finally, we require that values can't be more than
+ * 5 intervals apart. This is to avoid weird stuff.
+ *
+ * The way this works is by storing previous values
+ * in the database. This means that values must be
+ * inserted in the correct order.
+ */
 class CalculateDeltas{
     /** @var  Connection */
     private $conn;

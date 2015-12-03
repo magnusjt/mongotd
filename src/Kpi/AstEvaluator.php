@@ -2,7 +2,7 @@
 
 class AstEvaluator{
     private $variableEvaluator = NULL;
-    private $padding = NULL;
+    private $padding = false;
 
     /** @var  OperatorEvaluator */
     private $operatorEvaluator;
