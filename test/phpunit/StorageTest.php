@@ -1,18 +1,17 @@
 <?php
 
-use \Mongotd\Connection;
+use Mongotd\Connection;
 use Mongotd\CounterValue;
 use Mongotd\Logger;
-use \Mongotd\Mongotd;
 use Mongotd\Pipeline\ConvertToDateStringKeys;
 use Mongotd\Pipeline\Factory;
 use Mongotd\Pipeline\Pipeline;
-use \Mongotd\Resolution;
-use \Mongotd\Aggregation;
+use Mongotd\Resolution;
+use Mongotd\Aggregation;
 use Mongotd\Storage;
 
 class StorageTest extends PHPUnit_Framework_TestCase{
-    /** @var  \Mongotd\Connection */
+    /** @var  Connection */
     protected $conn;
 
 

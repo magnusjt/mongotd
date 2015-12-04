@@ -1,13 +1,9 @@
 <?php
 
 use Mongotd\Aggregation;
-use Mongotd\Kpi\AstEvaluator;
-use Mongotd\Kpi\Parser;
 use Mongotd\Pipeline\ConvertToDateStringKeys;
-use Mongotd\Pipeline\Formula;
 use Mongotd\Pipeline\Pad;
 use Mongotd\Pipeline\Pipeline;
-use Mongotd\Pipeline\Find;
 use Mongotd\Pipeline\RollupTime;
 use Mongotd\Pipeline\Series;
 use Mongotd\Resolution;
